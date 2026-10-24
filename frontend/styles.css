@@ -10,14 +10,16 @@
   --red: #d4513c;
   --black: #000;
   --black-edge: rgba(242, 239, 232, 0.28);
-  /* a few restrained accents */
-  --violet: #9d8cff;
-  --coral: #ff8466;
+  /* accents */
+  --violet: #a594ff;
+  --pink: #ff6fb5;
+  --coral: #ff8a5c;
+  --amber: #ffc25c;
   --teal: #4fd1b8;
-  --accent: linear-gradient(100deg, var(--violet), var(--coral));
-  --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
-  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --accent: linear-gradient(100deg, var(--violet), var(--pink) 55%, var(--amber));
+  --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'DM Mono', ui-monospace, Consolas, monospace;
   --ease: cubic-bezier(.7, 0, .2, 1);
 }
 
@@ -42,18 +44,24 @@ em { font-style: italic; }
 body::before {
   content: ''; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(38% 32% at 12% 8%, rgba(157, 140, 255, 0.20), transparent 70%),
-    radial-gradient(34% 30% at 92% 88%, rgba(255, 132, 102, 0.14), transparent 70%),
-    radial-gradient(26% 22% at 72% 18%, rgba(79, 209, 184, 0.09), transparent 70%);
+    radial-gradient(38% 32% at 12% 8%, rgba(165, 148, 255, 0.28), transparent 70%),
+    radial-gradient(34% 30% at 92% 88%, rgba(255, 111, 181, 0.20), transparent 70%),
+    radial-gradient(28% 24% at 75% 16%, rgba(79, 209, 184, 0.14), transparent 70%),
+    radial-gradient(26% 22% at 20% 92%, rgba(255, 194, 92, 0.10), transparent 70%);
   animation: glow 26s ease-in-out infinite alternate;
 }
 @keyframes glow { to { transform: translate(4%, -3%) rotate(6deg); } }
 
 /* Italic words carry the accent */
-.mega em, .question em, .index-title em, .month em, #done-title em {
+.mega em, .question em, .index-title em, .month em, #done-title em, .big-num, .stepper output {
   background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent;
   padding-right: 0.08em;
 }
+/* Fraunces italics get extra warmth at display sizes */
+.mega, .question, .index-title, .month, .big-num, .stat .value, .answer-word, .stepper output, .shutter-word {
+  font-optical-sizing: auto;
+}
+.mega em, .question em, .index-title em, .month em, #done-title em { font-weight: 300; }
 
 /* ---------- Paper texture & frame ---------- */
 .grain {
@@ -75,8 +83,8 @@ body::before {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2);
 }
 .mega {
-  font-family: var(--serif); font-weight: 400; line-height: 0.9; letter-spacing: -0.03em;
-  font-size: clamp(4rem, 15vw, 11rem);
+  font-family: var(--serif); font-weight: 400; line-height: 0.92; letter-spacing: -0.035em;
+  font-size: clamp(3.4rem, 12vw, 9rem);
 }
 .mega em, .question em, .index-title em, .month em { font-style: italic; }
 .lede { font-size: 1.05rem; line-height: 1.5; color: var(--ink-2); max-width: 34ch; }
@@ -105,7 +113,7 @@ body::before {
 
 .topbar {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  padding-bottom: 14px; border-bottom: 1px solid var(--ink); margin-bottom: 40px;
+  padding-bottom: 14px; border-bottom: 1px solid; border-image: var(--accent) 1; margin-bottom: 40px;
 }
 
 /* ---------- Buttons ---------- */
@@ -120,7 +128,7 @@ body::before {
 .btn.ink { background: var(--ink); color: var(--paper); }
 .btn.ink:hover { background: var(--accent); color: var(--on-color); }
 .btn.line { border: 1px solid var(--ink); }
-.btn.line:hover { background: var(--ink); color: var(--paper); }
+.btn.line:hover { background: var(--accent); color: var(--on-color); border-color: transparent; }
 .btn:disabled { opacity: 0.5; cursor: wait; }
 .link {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -132,7 +140,7 @@ body::before {
   width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--ink); font-size: 1.1rem;
   transition: background 0.2s, color 0.2s;
 }
-.circle-btn:hover { background: var(--ink); color: var(--paper); }
+.circle-btn:hover { background: var(--accent); color: var(--on-color); border-color: transparent; }
 
 /* ---------- Login ---------- */
 .login { width: min(460px, 100%); }
@@ -145,14 +153,14 @@ body::before {
   font-family: var(--serif); font-size: 1.9rem; color: var(--ink); outline: none;
   transition: border-color 0.25s;
 }
-.field input:focus { border-bottom-color: var(--ink); }
+.field input:focus { border-bottom-color: var(--violet); }
 .error { color: var(--red); min-height: 1.4em; margin-bottom: 18px; font-family: var(--mono); font-size: 12px; }
 .shake { animation: shake 0.45s; }
 @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 
 /* ---------- Welcome ---------- */
 .welcome { width: 100%; }
-.welcome .mega { margin: 20px 0 48px; font-size: clamp(4.4rem, 17vw, 13rem); }
+.welcome .mega { margin: 20px 0 48px; font-size: clamp(3.6rem, 13vw, 10rem); }
 .welcome-foot {
   display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; flex-wrap: wrap;
   border-top: 1px solid var(--ink); padding-top: 24px;
@@ -208,7 +216,7 @@ body::before {
 
 /* ---------- Hub ---------- */
 .hub-hero { display: flex; align-items: baseline; gap: 16px; margin-bottom: 36px; }
-.big-num { font-family: var(--serif); font-size: clamp(6rem, 20vw, 13rem); line-height: 0.8; letter-spacing: -0.04em; }
+.big-num { font-family: var(--serif); font-size: clamp(5rem, 16vw, 11rem); line-height: 0.85; font-weight: 500; letter-spacing: -0.04em; }
 .index { border-top: 1px solid var(--ink); }
 .index-row {
   position: relative; width: 100%; overflow: hidden; isolation: isolate;
@@ -352,11 +360,11 @@ button.day.off, button.day.locked { cursor: not-allowed; }
 .sw.open { border: 1px dashed rgba(242, 239, 232, 0.55); }
 
 /* ---------- Stats ---------- */
-.stats-head { margin-top: 72px; padding-bottom: 14px; border-bottom: 1px solid var(--ink); }
+.stats-head { margin-top: 72px; padding-bottom: 14px; border-bottom: 1px solid; border-image: var(--accent) 1; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); }
 .stat { padding: 24px 20px 26px; border-bottom: 1px solid var(--rule); animation: rise 0.6s var(--ease) both; }
 .stat:not(:nth-child(3n + 2)) { border-left: 1px solid var(--rule); }
-.stat .value { font-family: var(--serif); font-size: clamp(3rem, 7vw, 4.6rem); line-height: 1; letter-spacing: -0.03em; margin-top: 14px; }
+.stat .value { font-family: var(--serif); font-size: clamp(3rem, 7vw, 4.6rem); line-height: 1; letter-spacing: -0.03em; margin-top: 14px; color: var(--c, var(--ink)); }
 .stat .value small { font-size: 0.45em; color: var(--ink-2); }
 .stat.feature, .stat.wide { grid-column: 1 / -1; border-left: 0; }
 .stat.feature { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 12px 32px; }
@@ -402,3 +410,27 @@ button.day.off, button.day.locked { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Colour accents ---------- */
+/* Each index row has its own colour */
+.row-today { --row: linear-gradient(100deg, var(--coral), var(--amber)); --row-solid: var(--amber); }
+.row-cal { --row: linear-gradient(100deg, var(--violet), var(--teal)); --row-solid: var(--teal); }
+.index-row::before { background: var(--row, var(--accent)); }
+.index-row .index-no { color: var(--row-solid); }
+.index-row .index-title em { background: var(--row, var(--accent)); -webkit-background-clip: text; background-clip: text; }
+.index-row:hover .index-title em { background: none; }
+
+/* Yes / No carry a faint tint before hover */
+.answer.yes { background: rgba(58, 154, 107, 0.09); }
+.answer.no { background: rgba(212, 81, 60, 0.09); }
+.answer.yes .answer-word { color: #6fd3a0; }
+.answer.no .answer-word { color: #ff8a73; }
+.answer:hover .answer-word { color: var(--on-color); }
+
+/* Stats: a short coloured bar above each label */
+.stat .label::before {
+  content: ''; display: block; width: 28px; height: 3px; border-radius: 2px; margin-bottom: 12px;
+  background: var(--c, var(--accent));
+}
+.stat.feature .label::before { background: var(--accent); }
+.chips button.on { background: var(--accent); color: var(--on-color); }

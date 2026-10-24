@@ -3,7 +3,7 @@
 Streak: a personal streak tracker with a login, a daily check-in and a calendar with stats. It's hosted on Netlify.
 
 - `frontend/` has the HTML, CSS and JavaScript that run in the browser.
-- `netlify/functions/api.mjs` is the backend, a Netlify Function at `/api/*`. It handles login, saving days and locking past days. Data is stored in Netlify Blobs.
+- `netlify/functions/api.mjs` is the backend, a Netlify Function at `/api/*`. It handles login, saving days and locking past days. Data is stored in the Supabase table `daily_entries`, which only this function can reach (RLS on, no policies, service role key).
 
 ## Netlify settings
 
@@ -13,6 +13,8 @@ In **Site configuration → Environment variables**, add:
 | --- | --- | --- |
 | `STREAK_USERNAME` | `sharath` | Login ID (required) |
 | `STREAK_PASSWORD` | a strong password | Required |
+| `SUPABASE_URL` | `https://xxxx.supabase.co` | Supabase → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | the service_role key | Secret, server-only; never put it in code |
 | `SESSION_SECRET` | any long random text | Optional; changing it logs everyone out |
 
 The login stays in Netlify, not in the code, because this repo is public. The start date (`START_DATE`) and timezone (`TIMEZONE`) are set at the top of `netlify/functions/api.mjs`.
@@ -22,7 +24,6 @@ Then trigger a new deploy. Build settings come from `netlify.toml`, so no build 
 ## Run locally (needs Node.js)
 
 ```powershell
-npm install
 npx netlify-cli dev
 ```
 

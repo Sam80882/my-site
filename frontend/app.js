@@ -451,8 +451,8 @@ function renderStats() {
     const entry = entries[dateKey(addDays(new Date(), -i))];
     strip.push(`<i class="${colorOf(entry)}"></i>`);
   }
-  const tile = (no, value, label, delay) =>
-    `<div class="stat" style="animation-delay:${delay}ms"><div class="label">${no} — ${label}</div><div class="value">${value}</div></div>`;
+  const tile = (no, value, label, delay, color) =>
+    `<div class="stat" style="animation-delay:${delay}ms;--c:var(--${color})"><div class="label">${no} — ${label}</div><div class="value">${value}</div></div>`;
   $('#stats').innerHTML = `
     <div class="stat feature">
       <div class="label">i — Success rate</div>
@@ -462,12 +462,12 @@ function renderStats() {
         <p class="bar-caption">${s.kept} of ${s.logged} updated days kept.</p>
       </div>
     </div>
-    ${tile('ii', s.current, 'Current streak', 60)}
-    ${tile('iii', s.best, 'Highest streak', 120)}
-    ${tile('iv', s.kept, 'Green days', 180)}
-    ${tile('v', s.broken, 'Broken days', 240)}
-    ${tile('vi', s.xTotal ? `−${s.xTotal}` : '0', 'Total X (negative points)', 300)}
-    ${tile('vii', s.xAvg.toFixed(2), 'Average X per day', 360)}
+    ${tile('ii', s.current, 'Current streak', 60, 'amber')}
+    ${tile('iii', s.best, 'Highest streak', 120, 'violet')}
+    ${tile('iv', s.kept, 'Green days', 180, 'teal')}
+    ${tile('v', s.broken, 'Broken days', 240, 'coral')}
+    ${tile('vi', s.xTotal ? `−${s.xTotal}` : '0', 'Total X (negative points)', 300, 'pink')}
+    ${tile('vii', s.xAvg.toFixed(2), 'Average X per day', 360, 'pink')}
     <div class="stat wide" style="animation-delay:420ms">
       <div class="label">viii — Last 30 days</div>
       <div class="strip">${strip.join('')}</div>

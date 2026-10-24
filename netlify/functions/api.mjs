@@ -1,8 +1,8 @@
-// Streak API on Netlify Functions. Data lives in Netlify Blobs; the login comes from environment variables
-// (kept out of the public repo):
-//   STREAK_USERNAME, STREAK_PASSWORD   (required)
-//   SESSION_SECRET                     optional; signs login cookies (derived from the login if unset)
-import { getStore } from '@netlify/blobs';
+// Streak API on Netlify Functions. Data lives in the Supabase table daily_entries; secrets come from
+// environment variables (kept out of the public repo):
+//   STREAK_USERNAME, STREAK_PASSWORD             (required) the site login
+//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY      (required) server-only database access; RLS stays on with no policies
+//   SESSION_SECRET                               optional; signs login cookies (derived from the login if unset)
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 const START_DATE = '2026-10-24';   // first day that can be tracked
@@ -63,10 +63,47 @@ function isLoggedIn(req) {
   }
 }
 
-// ---------- Storage ----------
-const store = () => getStore({ name: 'streak', consistency: 'strong' });
-const loadEntries = async () => (await store().get('entries', { type: 'json' })) || {};
-const saveEntries = entries => store().setJSON('entries', entries);
+// ---------- Storage: Supabase REST (PostgREST) with the service role key ----------
+async function db(query, options = {}) {
+  const key = env('SUPABASE_SERVICE_ROLE_KEY');
+  const res = await fetch(`${env('SUPABASE_URL').replace(/\/+$/, '')}/rest/v1/daily_entries${query}`, {
+    ...options,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+      ...options.headers
+    }
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// Row in the table -> the shape the frontend uses
+function toEntry(row) {
+  const entry = row.kept ? { kept: true } : { kept: false, count: row.count };
+  if (row.locked) entry.locked = true;
+  return entry;
+}
+
+async function loadEntries() {
+  const rows = await db('?select=entry_date,kept,count,locked&order=entry_date');
+  return Object.fromEntries(rows.map(r => [r.entry_date, toEntry(r)]));
+}
+
+async function getEntry(date) {
+  const rows = await db(`?select=entry_date,kept,count,locked&entry_date=eq.${date}`);
+  return rows[0] ? toEntry(rows[0]) : null;
+}
+
+// Updates only touch unlocked rows, so a locked day can never change
+async function writeEntry(date, fields, exists) {
+  const rows = exists
+    ? await db(`?entry_date=eq.${date}&locked=is.false`, { method: 'PATCH', body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }) })
+    : await db('', { method: 'POST', body: JSON.stringify({ entry_date: date, ...fields }) });
+  return rows[0] ? toEntry(rows[0]) : null;
+}
 
 async function readBody(req) {
   const text = await req.text();
@@ -79,6 +116,9 @@ export default async (req) => {
   const password = env('STREAK_PASSWORD');
   if (!username || !password) {
     return json(500, { error: 'Server is missing STREAK_USERNAME / STREAK_PASSWORD settings' });
+  }
+  if (!env('SUPABASE_URL') || !env('SUPABASE_SERVICE_ROLE_KEY')) {
+    return json(500, { error: 'Server is missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY settings' });
   }
   const startDate = START_DATE;
   const path = new URL(req.url).pathname.replace(/\/+$/, '');
@@ -118,37 +158,35 @@ export default async (req) => {
       if (date < startDate || date > today) {
         return json(400, { error: `Only days from ${startDate} to today can be updated` });
       }
-      const entries = await loadEntries();
-      const existing = entries[date];
-      if (existing?.locked) return json(409, { error: 'This day is locked and can no longer be changed' });
+      const existing = await getEntry(date);
+      const lockedError = () => json(409, { error: 'This day is locked and can no longer be changed' });
+      if (existing?.locked) return lockedError();
 
       // Locking is separate from saving, and only allowed once the day is over
       if (lock) {
         if (method !== 'POST') return json(405, { error: 'Use POST to lock' });
         if (!existing) return json(400, { error: 'Update this day before locking it' });
         if (date >= today) return json(400, { error: 'A day can only be locked after it is over' });
-        existing.locked = true;
-        await saveEntries(entries);
-        return json(200, existing);
+        const locked = await writeEntry(date, { locked: true }, true);
+        return locked ? json(200, locked) : lockedError();
       }
 
       if (method !== 'PUT') return json(405, { error: 'Use PUT to update' });
       const body = await readBody(req);
-      let entry;
+      let fields;
       if (body.kept === true) {
-        entry = { kept: true };
+        fields = { kept: true, count: null };
       } else if (body.kept === false) {
         const count = Number(body.count);
         if (!Number.isInteger(count) || count < 1 || count > 99) {
           return json(400, { error: 'Count must be between 1 and 99' });
         }
-        entry = { kept: false, count };
+        fields = { kept: false, count };
       } else {
         return json(400, { error: '"kept" must be true or false' });
       }
-      entries[date] = entry;
-      await saveEntries(entries);
-      return json(200, entry);
+      const saved = await writeEntry(date, fields, !!existing);
+      return saved ? json(200, saved) : lockedError();
     }
 
     return json(404, { error: 'Not found' });
