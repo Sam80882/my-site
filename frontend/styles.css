@@ -440,28 +440,6 @@ button.day.off, button.day.locked { cursor: not-allowed; }
 .stat.feature .label::before { background: var(--accent); }
 .chips button.on { background: var(--accent); color: var(--on-color); }
 
-/* ---------- Background scene ---------- */
-.scenery {
-  position: fixed; left: 0; bottom: 0; width: 100%; height: 42vh; z-index: -1; pointer-events: none;
-  opacity: 0.55; transition: opacity 0.6s ease;
-}
-body[data-view="calendar"] .scenery { opacity: 0.12; }
-.scenery .stars circle { fill: var(--ink); opacity: 0.6; animation: twinkle 4s ease-in-out infinite alternate; }
-.scenery .stars circle:nth-child(2n) { animation-delay: -2s; }
-@keyframes twinkle { to { opacity: 0.15; } }
-.scenery .sun { opacity: 0.45; }
-.scenery .ridge-back { fill: #16122a; }
-.scenery .ridge-front { fill: #0e0c14; }
-.scenery .ridge-line { fill: none; stroke-width: 1.5; }
-.scenery .trail {
-  fill: none; stroke: var(--amber); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1 10;
-  animation: climb 6s linear infinite;
-}
-@keyframes climb { to { stroke-dashoffset: -110; } }
-.scenery .flag line { stroke: var(--ink); stroke-width: 2; }
-.scenery .flag path { fill: var(--coral); transform-origin: 0 -36px; animation: wave 2.4s ease-in-out infinite alternate; }
-@keyframes wave { to { transform: scaleX(0.82) skewY(4deg); } }
-
 /* ---------- Hub: today status, daily line, how it works ---------- */
 .today-status {
   display: inline-flex; align-items: center; gap: 10px; margin-bottom: 18px;
@@ -530,6 +508,65 @@ body[data-view="calendar"] .scenery { opacity: 0.12; }
 .table-view td:last-child, .table-view th:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 680px) {
-  .scenery { height: 30vh; }
   .how-steps { grid-template-columns: 1fr; }
+}
+
+/* ---------- Welcome: letters spin in from 3D space ---------- */
+.welcome .mega, .welcome-foot { perspective: 900px; }
+.ch { display: inline-block; will-change: transform; }
+.mega em:has(.ch) { background: none; }
+.mega em .ch { background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ---------- Menu intro ---------- */
+.intro { position: fixed; inset: 0; z-index: 80; }
+.intro[hidden] { display: none; }
+.intro-skip { position: absolute; right: 28px; bottom: 28px; z-index: 2; color: var(--ink-2); }
+.scene {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  opacity: 0; pointer-events: none; transform-origin: 0 0;
+}
+.scene-text { text-align: center; }
+.scene-big { font-family: var(--serif); font-size: clamp(2.6rem, 8vw, 4.8rem); line-height: 1; margin-top: 10px; letter-spacing: -0.02em; }
+.scene-sub { font-family: var(--mono); font-size: 13px; letter-spacing: 0.12em; color: var(--ink-2); margin-top: 10px; text-transform: uppercase; }
+
+/* Calendar: a ring of dates spinning in 3D */
+.ring-stage { width: 340px; height: 120px; perspective: 900px; display: grid; place-items: center; }
+.ring { position: relative; width: 0; height: 0; transform-style: preserve-3d; }
+.ring span {
+  position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 10px;
+  display: grid; place-items: center; font-family: var(--mono); font-size: 14px;
+  border: 1px solid var(--rule); background: rgba(242, 239, 232, 0.04); color: var(--ink);
+  backface-visibility: hidden;
+}
+.ring span.kept { background: var(--green); border-color: transparent; color: var(--on-color); }
+.ring span.bad { background: var(--red); border-color: transparent; color: var(--on-color); }
+.ring span.now { background: var(--accent); border-color: transparent; color: var(--on-color); }
+
+/* Today: a clock over a rising sun */
+.dial { position: relative; width: 200px; height: 200px; border-radius: 50%; overflow: hidden; border: 1px solid var(--rule); background: rgba(242, 239, 232, 0.03); }
+.sunrise {  position: absolute; left: 0; right: 0; bottom: 0; height: 70%;  background: radial-gradient(120% 100% at 50% 100%, rgba(255, 194, 92, 0.5), rgba(255, 111, 181, 0.22) 45%, transparent 75%);}
+.dial-face { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dial-face line { stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; }
+.dial-face line.major { stroke: var(--ink); stroke-width: 2.5; }
+.hand { position: absolute; left: 50%; bottom: 50%; border-radius: 3px; transform-origin: 50% 100%; background: var(--ink); }
+.hand.hour { width: 5px; height: 52px; margin-left: -2.5px; }
+.hand.min { width: 3px; height: 78px; margin-left: -1.5px; background: var(--amber); }
+.hand-cap { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--ink); border: 2px solid var(--paper); }
+
+/* Menu pieces wait offstage while the intro plays */
+.intro-pending .topbar, .intro-pending .hub-hero, .intro-pending .today-status,
+.intro-pending .quote, .intro-pending .how, .intro-pending .index-row.awaiting { opacity: 0; }
+.intro-pending .index { border-top-color: transparent; }
+.intro-reveal .topbar, .intro-reveal .hub-hero, .intro-reveal .today-status,
+.intro-reveal .quote, .intro-reveal .how { animation: rise 0.8s var(--ease) both; }
+.intro-reveal .hub-hero { animation-delay: 0.05s; }
+.intro-reveal .today-status { animation-delay: 0.12s; }
+.intro-reveal .quote { animation-delay: 0.18s; }
+.intro-reveal .how { animation-delay: 0.26s; }
+
+@media (max-width: 680px) {
+  .ring-stage { transform: scale(0.8); }
+  .dial { width: 170px; height: 170px; }
+  .hand.hour { height: 44px; }
+  .hand.min { height: 66px; }
 }

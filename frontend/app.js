@@ -110,7 +110,6 @@ setInterval(tickCorners, 1000);
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   $(`#view-${name}`).classList.add('active');
-  document.body.dataset.view = name;
   scrollTo(0, 0);
   if (name === 'hub') renderHub();
   if (name === 'today') renderUpdate();
@@ -118,13 +117,14 @@ function showView(name) {
 }
 
 // Ink bars drop over the page with a word, then lift away to reveal the next view
-function shutterTo(name, word) {
+function shutterTo(name, word, onShown) {
   const shutter = $('#shutter');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   $('#shutter-word').textContent = word;
   shutter.className = 'shutter closing';
   setTimeout(() => {
     showView(name);
+    if (onShown) onShown();
     shutter.className = 'shutter opening';
     setTimeout(() => (shutter.className = 'shutter'), reduced ? 0 : 850);
   }, reduced ? 0 : 1500);
@@ -155,6 +155,14 @@ $('#login-form').addEventListener('submit', async e => {
   try {
     const data = await api('/api/login', { method: 'POST', body: JSON.stringify(body) });
     $('#password').value = '';
+    // The login card flips away before the welcome screen spins in
+    if (!reducedMotion()) {
+      form.animate(
+        [{ transform: 'none', opacity: 1 }, { transform: 'perspective(900px) rotateY(-85deg) scale(0.85)', opacity: 0 }],
+        { duration: 550, easing: 'cubic-bezier(.7,0,.2,1)' }
+      );
+      await wait(550);
+    }
     await afterLogin(data);
   } catch (err) {
     error.textContent = err.message;
@@ -173,6 +181,7 @@ async function afterLogin(session) {
   document.querySelectorAll('.js-username').forEach(el => (el.textContent = username));
   entries = await api('/api/entries');
   showView('welcome');
+  spinInWelcome();
 }
 
 async function logout() {
@@ -181,7 +190,209 @@ async function logout() {
   showView('login');
 }
 
-$('#get-started').addEventListener('click', () => shutterTo('hub', 'Let’s begin.'));
+$('#get-started').addEventListener('click', () => shutterTo('hub', 'Let’s begin.', playHubIntro));
+
+// ---------- Intros ----------
+function reducedMotion() {
+  return matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+const rand = (min, max) => min + Math.random() * (max - min);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+// Wrap each character in a span so letters can move on their own
+function splitLetters(el) {
+  if (!el.dataset.split) {
+    const walk = node => {
+      [...node.childNodes].forEach(c => {
+        if (c.nodeType === Node.TEXT_NODE) {
+          const frag = document.createDocumentFragment();
+          for (const ch of c.textContent) {
+            if (ch === ' ') { frag.appendChild(document.createTextNode(' ')); continue; }
+            const s = document.createElement('span');
+            s.className = 'ch';
+            s.textContent = ch;
+            frag.appendChild(s);
+          }
+          c.replaceWith(frag);
+        } else if (c.nodeType === Node.ELEMENT_NODE && c.tagName !== 'BR') {
+          walk(c);
+        }
+      });
+    };
+    walk(el);
+    el.dataset.split = '1';
+  }
+  return [...el.querySelectorAll('.ch')];
+}
+
+// Every letter tumbles in from a random spot in 3D space and lands in place
+function spinInWelcome() {
+  if (reducedMotion()) return;
+  const view = $('#view-welcome');
+  splitLetters(view.querySelector('.mega')).forEach((s, i) => {
+    s.animate([
+      { transform: `translate3d(${rand(-300, 300)}px, ${rand(-220, 220)}px, -700px) rotateX(${rand(-360, 360)}deg) rotateY(${rand(-360, 360)}deg) rotateZ(${rand(-180, 180)}deg) scale(0.3)`, opacity: 0 },
+      { transform: 'none', opacity: 1 }
+    ], { duration: 1200, delay: 150 + i * 45, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+  });
+  view.querySelector('.label').animate(
+    [{ transform: 'rotateX(90deg)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+    { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }
+  );
+  view.querySelector('.welcome-foot .lede').animate(
+    [{ transform: 'rotateY(70deg) translateX(-40px)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+    { duration: 900, delay: 900, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }
+  );
+  $('#get-started').animate(
+    [{ transform: 'rotate(-540deg) scale(0)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+    { duration: 1300, delay: 1000, easing: 'cubic-bezier(.2,.9,.25,1.15)', fill: 'backwards' }
+  );
+}
+
+let introRun = 0;
+
+// Calendar time-lapse, then today's clock; each scene shrinks into its menu row
+async function playHubIntro() {
+  if (reducedMotion()) return;
+  const run = ++introRun;
+  const alive = () => run === introRun;
+  const hub = $('#view-hub');
+  const todayRow = hub.querySelector('.row-today');
+  const calRow = hub.querySelector('.row-cal');
+  const intro = $('#intro');
+
+  hub.classList.remove('intro-reveal');
+  hub.classList.add('intro-pending');
+  todayRow.classList.add('awaiting');
+  calRow.classList.add('awaiting');
+  intro.hidden = false;
+  $('#intro-skip').onclick = () => finishHubIntro(run, true);
+
+  await wait(500); // let the shutter lift
+  if (!alive()) return;
+  await calendarScene(alive);
+  if (!alive()) return;
+  await flyInto($('#scene-cal'), calRow);
+  if (!alive()) return;
+  await todayScene(alive);
+  if (!alive()) return;
+  await flyInto($('#scene-today'), todayRow);
+  if (!alive()) return;
+  finishHubIntro(run, false);
+}
+
+function finishHubIntro(run, skipped) {
+  if (run !== introRun) return;
+  introRun++;
+  const hub = $('#view-hub');
+  $('#intro').hidden = true;
+  document.querySelectorAll('#intro .scene').forEach(s => {
+    s.getAnimations({ subtree: true }).forEach(a => a.cancel());
+    s.style.opacity = '';
+  });
+  hub.querySelectorAll('.index-row').forEach(r => r.classList.remove('awaiting'));
+  hub.classList.remove('intro-pending');
+  hub.classList.add('intro-reveal');
+  if (skipped) hub.classList.remove('intro-reveal');
+}
+
+async function calendarScene(alive) {
+  const scene = $('#scene-cal');
+  const ring = $('#date-ring');
+  const today = new Date();
+  const days = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const radius = 150;
+  ring.replaceChildren(...Array.from({ length: days }, (_, i) => {
+    const s = document.createElement('span');
+    const k = dateKey(new Date(today.getFullYear(), today.getMonth(), i + 1));
+    s.textContent = i + 1;
+    if (k === todayKey()) s.className = 'now';
+    else if (entries[k]) s.className = entries[k].kept ? 'kept' : 'bad';
+    s.style.transform = `rotateY(${(i * 360) / days}deg) translateZ(${radius}px)`;
+    return s;
+  }));
+
+  scene.style.opacity = 1;
+  scene.animate([{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'ease-out' });
+  ring.animate(
+    [{ transform: 'rotateX(-16deg) rotateY(0deg)' }, { transform: `rotateX(-16deg) rotateY(${-720 - ((today.getDate() - 1) * 360) / days}deg)` }],
+    { duration: 2100, easing: 'cubic-bezier(.15,.65,.2,1)', fill: 'forwards' }
+  );
+
+  // Date and clock race from the first of the month up to right now
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const spanDays = today.getDate() - 1;
+  const nowMin = today.getHours() * 60 + today.getMinutes();
+  const start = performance.now();
+  const duration = 1900;
+  await new Promise(resolve => {
+    setTimeout(resolve, duration + 100); // never wait on frames alone
+    const tick = () => {
+      if (!alive()) return resolve();
+      const p = Math.min(1, (performance.now() - start) / duration);
+      const e = 1 - Math.pow(1 - p, 3);
+      const d = addDays(first, Math.round(e * spanDays));
+      const mins = Math.round(e * ((spanDays * 1440) + nowMin)) % 1440;
+      $('#scene-date').textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+      $('#scene-time').textContent = `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+      if (p < 1) requestAnimationFrame(tick);
+      else resolve();
+    };
+    requestAnimationFrame(tick);
+  });
+  await wait(350);
+}
+
+async function todayScene(alive) {
+  const scene = $('#scene-today');
+  const face = $('#dial-face');
+  if (!face.childElementCount) {
+    for (let i = 0; i < 60; i++) {
+      const major = i % 5 === 0;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', 100); line.setAttribute('x2', 100);
+      line.setAttribute('y1', 8); line.setAttribute('y2', major ? 22 : 14);
+      line.setAttribute('transform', `rotate(${i * 6} 100 100)`);
+      if (major) line.setAttribute('class', 'major');
+      face.appendChild(line);
+    }
+  }
+  const now = new Date();
+  $('#scene-today-date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) +
+    ' · ' + now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  scene.style.opacity = 1;
+  scene.animate([{ opacity: 0, transform: 'translateY(30px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'ease-out' });
+  scene.querySelector('.dial').animate([{ transform: 'scale(0.6) rotate(-90deg)' }, { transform: 'none' }], { duration: 700, easing: 'cubic-bezier(.2,.9,.25,1.15)' });
+  scene.querySelector('.sunrise').animate([{ transform: 'translateY(90px)' }, { transform: 'none' }], { duration: 1600, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' });
+  const minDeg = now.getMinutes() * 6;
+  const hourDeg = (now.getHours() % 12) * 30 + now.getMinutes() * 0.5;
+  $('#hand-m').animate([{ transform: 'rotate(0deg)' }, { transform: `rotate(${1440 + minDeg}deg)` }], { duration: 1700, easing: 'cubic-bezier(.15,.65,.2,1)', fill: 'forwards' });
+  $('#hand-h').animate([{ transform: 'rotate(0deg)' }, { transform: `rotate(${360 + hourDeg}deg)` }], { duration: 1700, easing: 'cubic-bezier(.15,.65,.2,1)', fill: 'forwards' });
+  // Timers rather than animation promises, so the sequence never stalls
+  await wait(1700);
+  if (alive()) await wait(350);
+}
+
+// Shrink a scene into the title of its menu row, then reveal the row
+async function flyInto(scene, row) {
+  const target = row.querySelector('.index-title').getBoundingClientRect();
+  const text = scene.querySelector('.scene-big').getBoundingClientRect();
+  const s = Math.min(1, target.height / text.height);
+  const dx = target.left - text.left * s;
+  const dy = target.top + target.height / 2 - (text.top + text.height / 2) * s;
+  const fly = scene.animate(
+    [{ transform: 'none', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 0 }],
+    { duration: 700, easing: 'cubic-bezier(.7,0,.2,1)', fill: 'forwards' }
+  );
+  await wait(380);
+  row.classList.remove('awaiting');
+  row.animate([{ opacity: 0, transform: 'scale(0.96)', filter: 'blur(6px)' }, { opacity: 1, transform: 'none', filter: 'none' }], { duration: 600, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  await wait(330);
+  scene.style.opacity = 0;
+  fly.cancel();
+}
 
 // ---------- Stats ----------
 function currentStreak() {
