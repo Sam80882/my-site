@@ -1,3 +1,6 @@
-# Real login and saved streak data stay on this machine only
-backend/config.json
-backend/data/
+node_modules/
+.netlify/
+.env
+
+# Old local PowerShell backend: login and saved streak data
+backend/
