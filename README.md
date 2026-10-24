@@ -13,9 +13,9 @@ In **Site configuration → Environment variables**, add:
 | --- | --- | --- |
 | `STREAK_USERNAME` | `sharath` | Login ID (required) |
 | `STREAK_PASSWORD` | a strong password | Required |
-| `STREAK_START_DATE` | `2026-10-24` | First day that can be tracked |
-| `STREAK_TIMEZONE` | `Asia/Kolkata` | What "today" means; this is the default |
 | `SESSION_SECRET` | any long random text | Optional; changing it logs everyone out |
+
+The login stays in Netlify, not in the code, because this repo is public. The start date (`START_DATE`) and timezone (`TIMEZONE`) are set at the top of `netlify/functions/api.mjs`.
 
 Then trigger a new deploy. Build settings come from `netlify.toml`, so no build command is needed.
 

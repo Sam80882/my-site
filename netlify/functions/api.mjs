@@ -1,11 +1,12 @@
-// Streak API on Netlify Functions. Data lives in Netlify Blobs; login comes from environment variables:
+// Streak API on Netlify Functions. Data lives in Netlify Blobs; the login comes from environment variables
+// (kept out of the public repo):
 //   STREAK_USERNAME, STREAK_PASSWORD   (required)
-//   STREAK_START_DATE                  first trackable day, e.g. 2026-10-24 (defaults to today)
-//   STREAK_TIMEZONE                    what "today" means, e.g. Asia/Kolkata (default)
 //   SESSION_SECRET                     optional; signs login cookies (derived from the login if unset)
 import { getStore } from '@netlify/blobs';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
+const START_DATE = '2026-10-24';   // first day that can be tracked
+const TIMEZONE = 'Asia/Kolkata';   // what "today" means
 const SESSION_DAYS = 7;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -13,7 +14,7 @@ const env = name => (process.env[name] || '').trim();
 
 function todayKey() {
   // en-CA formats dates as YYYY-MM-DD
-  return new Intl.DateTimeFormat('en-CA', { timeZone: env('STREAK_TIMEZONE') || 'Asia/Kolkata' }).format(new Date());
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE }).format(new Date());
 }
 
 function isRealDate(k) {
@@ -79,7 +80,7 @@ export default async (req) => {
   if (!username || !password) {
     return json(500, { error: 'Server is missing STREAK_USERNAME / STREAK_PASSWORD settings' });
   }
-  const startDate = isRealDate(env('STREAK_START_DATE')) ? env('STREAK_START_DATE') : todayKey();
+  const startDate = START_DATE;
   const path = new URL(req.url).pathname.replace(/\/+$/, '');
   const method = req.method;
 
