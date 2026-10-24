@@ -107,14 +107,32 @@ tickCorners();
 setInterval(tickCorners, 1000);
 
 // ---------- Views ----------
-function showView(name) {
+function showView(name, fromHistory = false) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   $(`#view-${name}`).classList.add('active');
   scrollTo(0, 0);
   if (name === 'hub') renderHub();
   if (name === 'today') renderUpdate();
   if (name === 'calendar') renderCalendar();
+
+  // Record the page so the browser / phone back button can return to it
+  if (!fromHistory) {
+    const state = { view: name, target: targetKey };
+    const same = history.state && history.state.view === name;
+    if (name === 'login' || name === 'welcome' || same) history.replaceState(state, '');
+    else history.pushState(state, '');
+  }
 }
+
+addEventListener('popstate', e => {
+  if (momentClose) momentClose();
+  if (!$('#intro').hidden) finishHubIntro(introRun, true);
+  if (!username) return showView('login', true);
+  const s = e.state;
+  const view = s && s.view && s.view !== 'login' ? s.view : 'hub';
+  if (view === 'today') targetKey = s.target || todayKey();
+  showView(view, true);
+});
 
 // Ink bars drop over the page with a word, then lift away to reveal the next view
 function shutterTo(name, word, onShown) {
@@ -187,6 +205,7 @@ async function afterLogin(session) {
 async function logout() {
   try { await api('/api/logout', { method: 'POST' }); } catch {}
   entries = {};
+  username = '';
   showView('login');
 }
 
@@ -528,6 +547,7 @@ function showClosed(text) {
   $('#done-text').textContent = text;
   $('#done-actions').hidden = true;
   $('#lock-note').hidden = true;
+  $('#done-art').innerHTML = artFor('closed');
   showStep('#step-done');
   restartStamp(stamp);
 }
@@ -548,7 +568,11 @@ $('#count-chips').addEventListener('click', e => {
 $('#count-minus').addEventListener('click', () => { slipCount = Math.max(1, slipCount - 1); renderCount(); });
 $('#count-plus').addEventListener('click', () => { slipCount = Math.min(99, slipCount + 1); renderCount(); });
 $('#count-back').addEventListener('click', () => showStep('#step-ask'));
-$('#btn-no').addEventListener('click', () => { showStep('#step-count'); renderCount(); });
+$('#btn-no').addEventListener('click', async () => {
+  await momentNo();
+  showStep('#step-count');
+  renderCount();
+});
 $('#btn-yes').addEventListener('click', () => saveDay({ kept: true }, $('#btn-yes')));
 $('#count-save').addEventListener('click', () => saveDay({ kept: false, count: slipCount }, $('#count-save')));
 $('#detail-edit').addEventListener('click', askDay);
@@ -560,6 +584,7 @@ async function saveDay(body, btn) {
   btn.disabled = true;
   try {
     entries[targetKey] = await api(`/api/entries/${targetKey}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (body.kept) await momentYes(streakAt(targetKey));
     showDetail(true);
   } catch (err) {
     toast(err.message);
@@ -621,9 +646,202 @@ function showDetail(justSaved, justLocked = false) {
   $('#detail-lock').hidden = !canLock(targetKey);
   $('#lock-note').hidden = !!entry.locked || canLock(targetKey);
   $('#lock-note-text').textContent = 'You can lock this day from tomorrow, in the calendar.';
+  $('#done-art').innerHTML = artFor(justLocked ? 'locked' : entry.kept ? 'kept' : entry.count >= 2 ? 'worse' : 'bad');
 
   showStep('#step-done');
   restartStamp(stamp);
+}
+
+// Green days in a row ending on a given day
+function streakAt(k) {
+  let n = 0;
+  for (let d = parseKey(k); entries[dateKey(d)]?.kept; d = addDays(d, -1)) n++;
+  return n;
+}
+
+// ---------- Result illustrations (line art, drawn in SVG) ----------
+function artFor(kind) {
+  const sparkle = (x, y, s) => `<path class="art-twinkle" d="M${x} ${y - s}L${x + s * 0.3} ${y - s * 0.3}L${x + s} ${y}L${x + s * 0.3} ${y + s * 0.3}L${x} ${y + s}L${x - s * 0.3} ${y + s * 0.3}L${x - s} ${y}L${x - s * 0.3} ${y - s * 0.3}Z" fill="#ffc25c" stroke="none"/>`;
+  const rays = n => Array.from({ length: n }, (_, i) => {
+    const a = (i * 2 * Math.PI) / n;
+    return `<line x1="${160 + Math.cos(a) * 120}" y1="${160 + Math.sin(a) * 120}" x2="${160 + Math.cos(a) * 150}" y2="${160 + Math.sin(a) * 150}"/>`;
+  }).join('');
+  const rain = (x0, x1, y, color) => `<g class="art-rain" stroke="${color}" stroke-width="3">${
+    Array.from({ length: Math.floor((x1 - x0) / 18) + 1 }, (_, i) => `<line x1="${x0 + i * 18}" y1="${y}" x2="${x0 + i * 18 - 4}" y2="${y + 14}"/>`).join('')
+  }</g>`;
+  const cloud = (fill, stroke) => `<path d="M88 150h144a36 36 0 0 0 0-72 52 52 0 0 0-100 8 34 34 0 0 0-44 64z" fill="${fill}" stroke="${stroke}" stroke-width="4"/>`;
+
+  if (kind === 'kept') return `
+    <div class="art-halo" style="background:var(--amber)"></div>
+    <svg viewBox="0 0 320 320" class="art-pop">
+      <defs><linearGradient id="art-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc25c"/><stop offset="1" stop-color="#ff6fb5"/></linearGradient></defs>
+      <g class="art-spin" stroke="rgba(255,194,92,.28)" stroke-width="3">${rays(16)}</g>
+      <g stroke="url(#art-gold)" stroke-width="5" fill="rgba(255,194,92,.08)">
+        <path d="M112 92h96v38a48 48 0 0 1-96 0z"/>
+        <path d="M112 104H90a22 22 0 0 0 26 38M208 104h22a22 22 0 0 1-26 38" fill="none"/>
+        <path d="M160 178v30M130 234h60v-14a8 8 0 0 0-8-8h-44a8 8 0 0 0-8 8z"/>
+      </g>
+      <path d="M160 108l6 13 14 2-10 10 2 14-12-7-12 7 2-14-10-10 14-2z" fill="#ffc25c" stroke="none"/>
+      <g stroke="#3a9a6b" stroke-width="4" fill="rgba(58,154,107,.18)">
+        <path d="M96 226c-26-18-34-52-22-80" fill="none"/><path d="M224 226c26-18 34-52 22-80" fill="none"/>
+        <ellipse cx="74" cy="176" rx="7" ry="13" transform="rotate(-25 74 176)"/><ellipse cx="80" cy="204" rx="7" ry="13" transform="rotate(-45 80 204)"/>
+        <ellipse cx="246" cy="176" rx="7" ry="13" transform="rotate(25 246 176)"/><ellipse cx="240" cy="204" rx="7" ry="13" transform="rotate(45 240 204)"/>
+      </g>
+      ${sparkle(70, 80, 12)}${sparkle(256, 92, 9)}${sparkle(238, 262, 11)}${sparkle(84, 262, 8)}
+    </svg>`;
+
+  if (kind === 'bad') return `
+    <div class="art-halo" style="background:#7fb6ff;opacity:.18"></div>
+    <svg viewBox="0 0 320 320" class="art-pop">
+      ${cloud('#1c1c22', '#8f8b98')}
+      ${rain(104, 216, 170, '#7fb6ff')}
+      <path d="M70 264h180" stroke="rgba(242,239,232,.2)" stroke-width="3"/>
+      <g class="art-sprout" stroke="#3a9a6b" stroke-width="4" fill="rgba(58,154,107,.25)">
+        <path d="M160 264v-44" fill="none"/>
+        <path d="M160 236c-26-4-36-22-36-34 18 0 34 12 36 34z"/>
+        <path d="M160 226c22-6 32-22 32-34-16 0-30 12-32 34z"/>
+      </g>
+    </svg>`;
+
+  if (kind === 'worse') return `
+    <div class="art-halo" style="background:#d4513c;opacity:.18"></div>
+    <svg viewBox="0 0 320 320" class="art-pop">
+      ${cloud('#141418', '#6b6878')}
+      <path class="art-bolt" d="M168 150l-24 46h22l-14 46 40-60h-24l14-32z" fill="#ffc25c" stroke="none"/>
+      ${rain(96, 140, 168, '#7fb6ff')}${rain(196, 232, 168, '#7fb6ff')}
+      <path d="M70 264h180" stroke="rgba(242,239,232,.2)" stroke-width="3"/>
+    </svg>`;
+
+  if (kind === 'locked') return `
+    <div class="art-halo" style="background:var(--violet)"></div>
+    <svg viewBox="0 0 320 320" class="art-pop">
+      <g class="art-spin" stroke="rgba(165,148,255,.25)" stroke-width="3">${rays(12)}</g>
+      <path class="art-shackle" d="M122 150v-30a38 38 0 0 1 76 0v30" stroke="#f2efe8" stroke-width="10"/>
+      <rect x="98" y="148" width="124" height="104" rx="16" fill="rgba(165,148,255,.12)" stroke="#a594ff" stroke-width="5"/>
+      <circle cx="160" cy="190" r="12" fill="#e0352b"/><path d="M160 198v24" stroke="#e0352b" stroke-width="8"/>
+      ${sparkle(250, 110, 10)}${sparkle(74, 214, 8)}
+    </svg>`;
+
+  return `
+    <svg viewBox="0 0 320 320" class="art-pop">
+      <g stroke="#8f8b98" stroke-width="5">
+        <path d="M110 80h100M110 240h100"/>
+        <path d="M120 80c0 50 80 50 80 80s-80 30-80 80M200 80c0 50-80 50-80 80s80 30 80 80" fill="rgba(242,239,232,.04)"/>
+      </g>
+      <path d="M136 226h48l-24-26z" fill="#ffc25c" stroke="none"/>
+    </svg>`;
+}
+
+// ---------- Moments after answering ----------
+let momentClose = null;
+
+// Show the overlay until it's tapped or the time runs out
+function holdMoment(ms) {
+  const m = $('#moment');
+  m.hidden = false;
+  return new Promise(resolve => {
+    let done = false;
+    const end = () => {
+      if (done) return;
+      done = true;
+      m.onclick = null;
+      momentClose = null;
+      m.hidden = true;
+      resolve();
+    };
+    m.onclick = end;
+    momentClose = end;
+    setTimeout(end, ms);
+  });
+}
+
+function fadeUp(els, start) {
+  els.forEach((el, i) => el.animate(
+    [{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
+    { duration: 600, delay: start + i * 120, easing: 'ease-out', fill: 'backwards' }
+  ));
+}
+
+function burstConfetti() {
+  const colors = ['#a594ff', '#ff6fb5', '#ffc25c', '#4fd1b8', '#3a9a6b'];
+  for (let i = 0; i < 90; i++) {
+    const bit = document.createElement('i');
+    bit.className = 'confetti-bit';
+    bit.style.background = colors[i % colors.length];
+    document.body.appendChild(bit);
+    const a = rand(0, Math.PI * 2), d = rand(140, 460);
+    bit.animate([
+      { transform: 'translate(-50%, -50%) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${Math.cos(a) * d}px), calc(-50% + ${Math.sin(a) * d + 180}px)) rotate(${rand(-720, 720)}deg)`, opacity: 0 }
+    ], { duration: rand(1200, 2000), easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'forwards' });
+    setTimeout(() => bit.remove(), 2100);
+  }
+}
+
+const MILESTONES = { 3: 'Three in a row!', 7: 'One full week!', 14: 'Two weeks strong!', 21: '21 days — a habit is forming!', 30: 'A whole month!', 50: 'Fifty days!', 100: 'One hundred days!' };
+
+// Yes: a medal drops in, spins, and the streak ticks up with confetti
+async function momentYes(n) {
+  const m = $('#moment');
+  const stage = $('#moment-stage');
+  m.classList.remove('sad');
+  const milestone = MILESTONES[n];
+  stage.innerHTML = `
+    <div class="medal"><div class="medal-rays"></div><div class="medal-coin" id="medal-num">${Math.max(0, n - 1)}</div></div>
+    <p class="moment-kicker">Achievement unlocked</p>
+    <h2 class="moment-title">Day ${n} <em>streak</em></h2>
+    ${milestone ? `<p class="moment-milestone">${milestone}</p>` : ''}
+    <p class="moment-sub">${n === 1 ? 'Every streak starts with day one. You just started yours.' : 'You showed up again. Keep the chain going.'}</p>`;
+  const shown = holdMoment(3400);
+  if (reducedMotion()) {
+    $('#medal-num').textContent = n;
+  } else {
+    stage.querySelector('.medal-coin').animate(
+      [{ transform: 'translateY(-260px) rotateY(0deg) scale(0.4)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+      { duration: 1100, easing: 'cubic-bezier(.2,.9,.25,1.1)' }
+    );
+    fadeUp([...stage.querySelectorAll('.moment-kicker, .moment-title, .moment-milestone, .moment-sub')], 700);
+    setTimeout(() => {
+      const num = $('#medal-num');
+      if (!num) return;
+      num.textContent = n;
+      num.animate([{ transform: 'scale(1.6)' }, { transform: 'none' }], { duration: 500, easing: 'cubic-bezier(.2,1.4,.4,1)' });
+      burstConfetti();
+    }, 950);
+  }
+  await shown;
+}
+
+// No: colour drains away and a sad little rain cloud drifts in
+async function momentNo() {
+  const m = $('#moment');
+  const stage = $('#moment-stage');
+  m.classList.add('sad');
+  stage.innerHTML = `
+    <svg class="sad-cloud" viewBox="0 0 220 170" aria-hidden="true">
+      <path class="cloud" d="M52 112h118a32 32 0 0 0 0-64 46 46 0 0 0-88 6 28 28 0 0 0-30 58z"/>
+      <path class="face" d="M92 76v8M130 76v8M94 102q17-12 34 0"/>
+      <path class="tear" d="M90 90q-5 9 0 12q5-3 0-12z"/>
+      <g class="rain"><line x1="72" y1="126" x2="68" y2="140"/><line x1="96" y1="126" x2="92" y2="140"/><line x1="120" y1="126" x2="116" y2="140"/><line x1="144" y1="126" x2="140" y2="140"/></g>
+    </svg>
+    <p class="moment-kicker">Streak interrupted</p>
+    <h2 class="moment-title">Oh no… <em>that’s okay.</em></h2>
+    <p class="moment-sub">A slip isn’t the end. Be honest about how many times, and tomorrow is a fresh page.</p>`;
+  document.body.classList.add('drained');
+  const shown = holdMoment(3000);
+  if (!reducedMotion()) {
+    stage.querySelector('.sad-cloud').animate(
+      [{ transform: 'translateX(-50vw) rotate(-8deg)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+      { duration: 1100, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    );
+    stage.querySelector('.tear').animate(
+      [{ transform: 'translateY(0)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1, offset: 0.2 }, { transform: 'translateY(38px)', opacity: 0 }],
+      { duration: 1300, delay: 1000, iterations: 2 }
+    );
+    fadeUp([...stage.querySelectorAll('.moment-kicker, .moment-title, .moment-sub')], 600);
+  }
+  await shown;
+  document.body.classList.remove('drained');
 }
 
 // ---------- Calendar ----------

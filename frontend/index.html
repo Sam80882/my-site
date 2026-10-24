@@ -120,8 +120,22 @@
         <h2 class="question" id="ask-question">Did you maintain<br>today's <em>streak?</em></h2>
         <p class="lede" id="today-current"></p>
         <div class="yesno">
-          <button class="answer yes" id="btn-yes"><span class="label">A.</span><span class="answer-word">Yes</span></button>
-          <button class="answer no" id="btn-no"><span class="label">B.</span><span class="answer-word">No</span></button>
+          <button class="answer yes" id="btn-yes">
+            <span class="label">A. — I kept it</span>
+            <svg class="answer-icon sun-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <g class="rays"><path d="M32 4v8M32 52v8M4 32h8M52 32h8M12.2 12.2l5.7 5.7M46.1 46.1l5.7 5.7M12.2 51.8l5.7-5.7M46.1 17.9l5.7-5.7"/></g>
+              <circle cx="32" cy="32" r="11"/>
+            </svg>
+            <span class="answer-word">Yes</span>
+          </button>
+          <button class="answer no" id="btn-no">
+            <span class="label">B. — Not today</span>
+            <svg class="answer-icon cloud-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <path class="cloud" d="M18 40h28a10 10 0 0 0 0-20 14 14 0 0 0-26.5 3A8.5 8.5 0 0 0 18 40z"/>
+              <g class="drops"><path d="M24 46l-2 6M34 46l-2 6M44 46l-2 6"/></g>
+            </svg>
+            <span class="answer-word">No</span>
+          </button>
         </div>
       </div>
 
@@ -144,20 +158,23 @@
         </div>
       </div>
 
-      <div class="step" id="step-done" hidden>
-        <p class="label" id="done-label"></p>
-        <div class="stamp" id="done-stamp"></div>
-        <h2 class="question small" id="done-title"></h2>
-        <p class="lede" id="done-text"></p>
-        <div class="row" id="done-actions">
-          <button class="btn line" id="detail-edit">Edit</button>
-          <button class="btn ink" id="detail-lock"><i class="lock-dot"></i>Lock this day</button>
+      <div class="step done-layout" id="step-done" hidden>
+        <div class="done-main">
+          <p class="label" id="done-label"></p>
+          <div class="stamp" id="done-stamp"></div>
+          <h2 class="question small" id="done-title"></h2>
+          <p class="lede" id="done-text"></p>
+          <div class="row" id="done-actions">
+            <button class="btn line" id="detail-edit">Edit</button>
+            <button class="btn ink" id="detail-lock"><i class="lock-dot"></i>Lock this day</button>
+          </div>
+          <p class="warn" id="lock-note"><i class="lock-dot"></i><span id="lock-note-text"></span></p>
+          <div class="row links">
+            <button class="link" data-go="hub">← Index</button>
+            <button class="link" data-go="calendar">View calendar →</button>
+          </div>
         </div>
-        <p class="warn" id="lock-note"><i class="lock-dot"></i><span id="lock-note-text"></span></p>
-        <div class="row links">
-          <button class="link" data-go="hub">← Index</button>
-          <button class="link" data-go="calendar">View calendar →</button>
-        </div>
+        <div class="done-art" id="done-art" aria-hidden="true"></div>
       </div>
 
       <div class="step" id="step-confirm" hidden>
@@ -245,6 +262,12 @@
     <i></i><i></i><i></i><i></i><i></i><i></i>
     <span class="shutter-word" id="shutter-word"></span>
   </div>
+  <!-- Full-screen moment after answering: achievement for Yes, a gentle letdown for No -->
+  <div id="moment" class="moment" hidden>
+    <div class="moment-stage" id="moment-stage"></div>
+    <p class="moment-hint">Tap anywhere to continue</p>
+  </div>
+
   <div id="toast" class="toast" role="status"></div>
   <script src="app.js"></script>
 </body>
