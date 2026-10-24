@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streak</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='50' fill='%23141414'/><text x='50' y='68' font-size='56' text-anchor='middle' fill='%23f2efe8' font-family='Georgia,serif' font-style='italic'>s</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Page frame with corner marks -->
+  <div class="frame" aria-hidden="true">
+    <span class="corner tl">Streak — Personal ledger</span>
+    <span class="corner tr" id="corner-date"></span>
+    <span class="corner bl">Vol. 01</span>
+    <span class="corner br" id="corner-clock"></span>
+  </div>
+
+  <main>
+    <!-- Login -->
+    <section id="view-login" class="view">
+      <form id="login-form" class="login" novalidate>
+        <p class="label">(01) — Sign in</p>
+        <h1 class="mega">Streak<em>.</em></h1>
+        <p class="lede">A quiet place to keep count of the days that matter.</p>
+        <label class="field">
+          <span class="label">Login ID</span>
+          <input id="username" autocomplete="username" required>
+        </label>
+        <label class="field">
+          <span class="label">Password</span>
+          <input id="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p id="login-error" class="error" role="alert"></p>
+        <button class="btn ink" type="submit">Enter <span class="arrow">→</span></button>
+      </form>
+    </section>
+
+    <!-- Welcome -->
+    <section id="view-welcome" class="view">
+      <div class="welcome">
+        <p class="label">(02) — Hello, <span class="js-username"></span></p>
+        <h1 class="mega">Every day<br><em>counts.</em></h1>
+        <div class="welcome-foot">
+          <p class="lede">One honest answer a day.<br>The calendar does the rest.</p>
+          <button id="get-started" class="orbit" aria-label="Get started">
+            <svg viewBox="0 0 200 200" class="orbit-text" aria-hidden="true">
+              <defs><path id="circle" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0"/></defs>
+              <text><textPath href="#circle">Get started · Get started · Get started ·</textPath></text>
+            </svg>
+            <span class="orbit-core">→</span>
+          </button>
+        </div>
+        <button class="link" data-logout>Not you? Log out</button>
+      </div>
+    </section>
+
+    <!-- Hub -->
+    <section id="view-hub" class="view">
+      <header class="topbar">
+        <span class="label">(03) — Index</span>
+        <button class="link" data-logout>Log out</button>
+      </header>
+      <div class="hub-hero">
+        <div class="big-num" id="hub-streak-num">0</div>
+        <p class="label" id="hub-streak-label">day streak</p>
+      </div>
+      <nav class="index">
+        <button class="index-row" data-go="today">
+          <span class="index-no">01</span>
+          <span class="index-title">Today's <em>update</em></span>
+          <span class="index-desc">Did you keep it today?</span>
+          <span class="index-arrow">↗</span>
+        </button>
+        <button class="index-row" data-go="calendar">
+          <span class="index-no">02</span>
+          <span class="index-title"><em>Calendar</em> &amp; stats</span>
+          <span class="index-desc" id="calendar-desc">Every day, at a glance.</span>
+          <span class="index-arrow">↗</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- Today's update -->
+    <section id="view-today" class="view">
+      <header class="topbar">
+        <button class="link" data-go="hub">← Index</button>
+        <span class="label" id="today-date"></span>
+      </header>
+
+      <div class="step" id="step-ask">
+        <p class="label" id="ask-label">(04) — Today's update</p>
+        <h2 class="question" id="ask-question">Did you maintain<br>today's <em>streak?</em></h2>
+        <p class="lede" id="today-current"></p>
+        <div class="yesno">
+          <button class="answer yes" id="btn-yes"><span class="label">A.</span><span class="answer-word">Yes</span></button>
+          <button class="answer no" id="btn-no"><span class="label">B.</span><span class="answer-word">No</span></button>
+        </div>
+      </div>
+
+      <div class="step" id="step-count" hidden>
+        <p class="label">(04b) — Be honest</p>
+        <h2 class="question">How many <em>times?</em></h2>
+        <div class="stepper">
+          <button type="button" id="count-minus" aria-label="Fewer">−</button>
+          <output id="count-value">1</output>
+          <button type="button" id="count-plus" aria-label="More">+</button>
+        </div>
+        <div class="chips" id="count-chips"></div>
+        <div class="preview-wrap">
+          <span class="label">On the calendar</span>
+          <span class="day day-preview" id="count-preview"></span>
+        </div>
+        <div class="row">
+          <button class="btn line" id="count-back">Back</button>
+          <button class="btn ink" id="count-save">Save <span class="arrow">→</span></button>
+        </div>
+      </div>
+
+      <div class="step" id="step-done" hidden>
+        <p class="label" id="done-label"></p>
+        <div class="stamp" id="done-stamp"></div>
+        <h2 class="question small" id="done-title"></h2>
+        <p class="lede" id="done-text"></p>
+        <div class="row" id="done-actions">
+          <button class="btn line" id="detail-edit">Edit</button>
+          <button class="btn ink" id="detail-lock"><i class="lock-dot"></i>Lock this day</button>
+        </div>
+        <p class="warn" id="lock-note"><i class="lock-dot"></i><span id="lock-note-text"></span></p>
+        <div class="row links">
+          <button class="link" data-go="hub">← Index</button>
+          <button class="link" data-go="calendar">View calendar →</button>
+        </div>
+      </div>
+
+      <div class="step" id="step-confirm" hidden>
+        <p class="label">(04c) — Lock</p>
+        <h2 class="question">Lock it <em>in?</em></h2>
+        <div class="confirm-box">
+          <span class="day day-preview" id="confirm-preview"></span>
+          <p class="lede" id="confirm-text"></p>
+        </div>
+        <p class="warn"><i class="lock-dot"></i>Once locked, this day can't be changed again.</p>
+        <div class="row">
+          <button class="btn line" id="confirm-back">Back</button>
+          <button class="btn ink" id="confirm-lock">Confirm &amp; lock <span class="arrow">→</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Calendar -->
+    <section id="view-calendar" class="view">
+      <header class="topbar">
+        <button class="link" data-go="hub">← Index</button>
+        <button class="link" data-go="today">Today's update →</button>
+      </header>
+
+      <div class="cal-head">
+        <div>
+          <p class="label">(05) — Calendar</p>
+          <h2 class="month" id="month-label"></h2>
+        </div>
+        <div class="cal-nav">
+          <button class="circle-btn" id="prev-month" aria-label="Previous month">←</button>
+          <button class="circle-btn" id="next-month" aria-label="Next month">→</button>
+        </div>
+      </div>
+      <div class="weekdays">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="legend">
+        <span><i class="sw green"></i>Kept</span>
+        <span><i class="sw red"></i>Broke once</span>
+        <span><i class="sw black"></i>Broke 2+ times</span>
+        <span><i class="sw open"></i>Needs an update</span>
+        <span><i class="ready-dot"></i>Ready to lock</span>
+        <span><i class="lock-dot"></i>Locked</span>
+      </div>
+
+      <div class="stats-head">
+        <p class="label">(06) — The numbers</p>
+      </div>
+      <div class="stats" id="stats"></div>
+    </section>
+  </main>
+
+  <!-- Shutter transition -->
+  <div id="shutter" class="shutter" aria-hidden="true">
+    <i></i><i></i><i></i><i></i><i></i><i></i>
+    <span class="shutter-word" id="shutter-word"></span>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>

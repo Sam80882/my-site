@@ -1,0 +1,3 @@
+# Real login and saved streak data stay on this machine only
+backend/config.json
+backend/data/
