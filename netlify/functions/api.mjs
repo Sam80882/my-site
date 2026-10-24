@@ -70,7 +70,8 @@ async function db(query, options = {}) {
     ...options,
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
+      // Legacy service_role keys are JWTs and also go in Authorization; new sb_secret_ keys only use apikey
+      ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}),
       'Content-Type': 'application/json',
       Prefer: 'return=representation',
       ...options.headers
