@@ -110,6 +110,7 @@ setInterval(tickCorners, 1000);
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   $(`#view-${name}`).classList.add('active');
+  document.body.dataset.view = name;
   scrollTo(0, 0);
   if (name === 'hub') renderHub();
   if (name === 'today') renderUpdate();
@@ -226,10 +227,35 @@ function computeStats() {
 }
 
 // ---------- Hub ----------
+const QUOTES = [
+  'Small steps, every single day.',
+  'You don’t have to be perfect. Just keep showing up.',
+  'One honest day at a time.',
+  'A slip is a data point, not a verdict.',
+  'Momentum is built, not found.',
+  'Today counts. So does tomorrow.',
+  'Progress over perfection.',
+  'The climb is made of ordinary days.',
+  'Start again as many times as it takes.',
+  'Be proud of the days you kept.'
+];
+
 function renderHub() {
   const n = currentStreak();
   $('#hub-streak-num').textContent = String(n).padStart(2, '0');
   $('#hub-streak-label').textContent = n ? 'day streak — keep going' : 'day streak — start one today';
+
+  // A new line each day
+  const dayNo = Math.floor(parseKey(todayKey()).getTime() / 864e5);
+  $('#hub-quote').textContent = QUOTES[dayNo % QUOTES.length];
+
+  const today = entries[todayKey()];
+  const status = $('#today-status');
+  status.className = `today-status ${!today ? '' : today.kept ? 'kept' : 'broken'}`;
+  status.textContent = !today ? 'Today: not updated yet — open Today’s update below.'
+    : today.kept ? 'Today: kept ✓ — nice work.'
+    : `Today: ${marksOf(today)} — tomorrow is a fresh page.`;
+
   const missed = pastDays(k => !entries[k]).length;
   const ready = pastDays(k => canLock(k)).length;
   const notes = [];
@@ -446,33 +472,268 @@ function renderCalendar() {
 
 function renderStats() {
   const s = computeStats();
-  const strip = [];
-  for (let i = 29; i >= 0; i--) {
-    const entry = entries[dateKey(addDays(new Date(), -i))];
-    strip.push(`<i class="${colorOf(entry)}"></i>`);
-  }
-  const tile = (no, value, label, delay, color) =>
-    `<div class="stat" style="animation-delay:${delay}ms;--c:var(--${color})"><div class="label">${no} — ${label}</div><div class="value">${value}</div></div>`;
+  const days = chartDays();
+  const span = days.length === 1 ? 'today' : `the last ${days.length} days`;
+  const tile = (no, value, label, delay, color, hint) =>
+    `<div class="stat" style="animation-delay:${delay}ms;--c:var(--${color})"><div class="label">${no} — ${label}</div><div class="value">${value}</div><p class="stat-hint">${hint}</p></div>`;
   $('#stats').innerHTML = `
     <div class="stat feature">
       <div class="label">i — Success rate</div>
       <div class="value">${s.rate}<small>%</small></div>
       <div>
         <div class="bar"><span style="transform:scaleX(${s.rate / 100})"></span></div>
-        <p class="bar-caption">${s.kept} of ${s.logged} updated days kept.</p>
+        <p class="bar-caption">${s.kept} of ${s.logged} updated days kept. Higher is better.</p>
       </div>
     </div>
-    ${tile('ii', s.current, 'Current streak', 60, 'amber')}
-    ${tile('iii', s.best, 'Highest streak', 120, 'violet')}
-    ${tile('iv', s.kept, 'Green days', 180, 'teal')}
-    ${tile('v', s.broken, 'Broken days', 240, 'coral')}
-    ${tile('vi', s.xTotal ? `−${s.xTotal}` : '0', 'Total X (negative points)', 300, 'pink')}
-    ${tile('vii', s.xAvg.toFixed(2), 'Average X per day', 360, 'pink')}
-    <div class="stat wide" style="animation-delay:420ms">
-      <div class="label">viii — Last 30 days</div>
-      <div class="strip">${strip.join('')}</div>
+    ${tile('ii', s.current, 'Current streak', 60, 'amber', 'Green days in a row, up to today.')}
+    ${tile('iii', s.best, 'Highest streak', 120, 'violet', 'Your longest run of green days. It stays even after a break.')}
+    ${tile('iv', s.kept, 'Green days', 180, 'teal', 'Days you kept the streak.')}
+    ${tile('v', s.broken, 'Broken days', 240, 'coral', 'Days marked red or black.')}
+    ${tile('vi', s.xTotal ? `−${s.xTotal}` : '0', 'Total X (negative points)', 300, 'pink', 'Every X mark counts as one negative point.')}
+    ${tile('vii', s.xAvg.toFixed(2), 'Average X per day', 360, 'pink', 'Total X ÷ updated days. Lower is better.')}
+    <div class="stat wide chart-card" style="animation-delay:420ms">
+      <div class="label">viii — Daily results</div>
+      <p class="stat-hint">Each bar is one day of ${span}. Up means you kept it. Down shows how many X marks that day got.</p>
+      <div class="chart-legend">
+        <span><i class="sw green"></i>Kept (+1)</span>
+        <span><i class="sw red"></i>X marks (−1 each)</span>
+        <span><i class="sw none"></i>Not updated</span>
+      </div>
+      <div class="chart" id="chart-daily"></div>
+    </div>
+    <div class="stat wide chart-card" style="animation-delay:480ms">
+      <div class="label">ix — Streak over time</div>
+      <p class="stat-hint">How many green days in a row you had on each day. It climbs while you keep going and drops to 0 when the streak breaks.</p>
+      <div class="chart" id="chart-streak"></div>
+      <details class="table-view">
+        <summary>Show as table</summary>
+        <table>
+          <thead><tr><th>Day</th><th>Result</th><th>Streak</th></tr></thead>
+          <tbody id="chart-table"></tbody>
+        </table>
+      </details>
     </div>`;
+  drawCharts();
 }
+
+// ---------- Charts ----------
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+// Up to the last 30 days, never before the start date
+function chartDays() {
+  const out = [];
+  let d = addDays(new Date(), -29);
+  if (dateKey(d) < startKey) d = parseKey(startKey);
+  for (; dateKey(d) <= todayKey(); d = addDays(d, 1)) out.push(dateKey(d));
+  return out;
+}
+
+// Green days in a row on each day; today counts as "not over yet" until updated
+function streakSeries(days) {
+  let run = 0;
+  for (let d = addDays(parseKey(days[0]), -1); entries[dateKey(d)]?.kept; d = addDays(d, -1)) run++;
+  return days.map(k => {
+    const e = entries[k];
+    if (e?.kept) run++;
+    else if (e || k !== todayKey()) run = 0;
+    return run;
+  });
+}
+
+function resultText(e) {
+  if (!e) return 'Not updated';
+  return e.kept ? 'Kept ✓' : `${e.count} X mark${e.count > 1 ? 's' : ''}`;
+}
+
+function tipFor(box) {
+  let tip = box.querySelector('.chart-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'chart-tip';
+    tip.hidden = true;
+    box.appendChild(tip);
+  }
+  return tip;
+}
+
+function showTip(box, x, y, value, label) {
+  const tip = tipFor(box);
+  const strong = document.createElement('strong');
+  strong.textContent = value;
+  const span = document.createElement('span');
+  span.textContent = label;
+  tip.replaceChildren(strong, span);
+  tip.hidden = false;
+  tip.style.left = `${Math.min(Math.max(x - tip.offsetWidth / 2, 0), box.clientWidth - tip.offsetWidth)}px`;
+  tip.style.top = `${Math.max(y - tip.offsetHeight - 10, 0)}px`;
+}
+
+function hideTip(box) {
+  tipFor(box).hidden = true;
+}
+
+// Column with a 4px rounded end away from the baseline
+function barPath(x, y0, w, y1) {
+  const r = Math.min(4, w / 2, Math.abs(y1 - y0));
+  const dir = y1 < y0 ? 1 : -1;
+  return `M${x},${y0} V${y1 + dir * r} Q${x},${y1} ${x + r},${y1} H${x + w - r} Q${x + w},${y1} ${x + w},${y1 + dir * r} V${y0} Z`;
+}
+
+function addTick(svg, x, y, text, anchor = 'end') {
+  const t = svgEl('text', { x, y, 'text-anchor': anchor, class: 'tick' });
+  t.textContent = text;
+  svg.appendChild(t);
+}
+
+function addDateLabels(svg, days, xAt, y, left, right) {
+  const short = k => (k === todayKey() ? 'Today' : prettyDate(k, { day: 'numeric', month: 'short' }));
+  addTick(svg, left, y, short(days[0]), 'start');
+  if (days.length > 1) addTick(svg, right, y, short(days[days.length - 1]), 'end');
+  if (days.length > 8) {
+    const mid = Math.floor((days.length - 1) / 2);
+    addTick(svg, xAt(mid), y, short(days[mid]), 'middle');
+  }
+}
+
+function drawCharts() {
+  const days = chartDays();
+  const daily = $('#chart-daily');
+  const streak = $('#chart-streak');
+  if (!daily || !streak) return;
+  if (!days.length) {
+    daily.innerHTML = streak.innerHTML = '<p class="chart-empty">Nothing to show yet.</p>';
+    return;
+  }
+  const series = streakSeries(days);
+  drawDaily(daily, days);
+  drawStreak(streak, days, series);
+
+  const rows = days.slice().reverse().map((k, i) => {
+    const tr = document.createElement('tr');
+    [prettyDate(k), resultText(entries[k]), series[days.length - 1 - i]].forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    return tr;
+  });
+  $('#chart-table').replaceChildren(...rows);
+}
+
+function drawDaily(box, days) {
+  const W = box.clientWidth, H = 200;
+  const m = { t: 12, r: 4, b: 26, l: 30 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const maxX = Math.max(1, ...days.map(k => (entries[k] && !entries[k].kept ? entries[k].count : 0)));
+  const y = v => m.t + ((1 - v) / (1 + maxX)) * ph; // +1 at the top, −maxX at the bottom
+  const band = pw / days.length;
+  const bw = Math.max(2, Math.min(24, band - 2));
+  const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': 'Daily results chart' });
+
+  const ticks = [1, 0, -maxX];
+  if (maxX >= 4) ticks.push(-Math.round(maxX / 2));
+  for (const t of ticks) {
+    svg.appendChild(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), class: t === 0 ? 'axis' : 'grid' }));
+    addTick(svg, m.l - 6, y(t) + 3.5, t > 0 ? '+1' : t === 0 ? '0' : `−${-t}`);
+  }
+
+  days.forEach((k, i) => {
+    const e = entries[k];
+    const cx = m.l + band * i + band / 2;
+    const hit = svgEl('rect', { x: m.l + band * i, y: m.t, width: band, height: ph, class: 'hit', tabindex: 0 });
+    svg.appendChild(hit);
+    if (e) svg.appendChild(svgEl('path', { d: barPath(cx - bw / 2, y(0), bw, y(e.kept ? 1 : -e.count)), class: e.kept ? 'bar-good' : 'bar-bad' }));
+    else svg.appendChild(svgEl('circle', { cx, cy: y(0), r: 2, class: 'bar-none' }));
+
+    const value = resultText(e);
+    const label = prettyDate(k) + (e?.locked ? ' · locked' : '');
+    hit.setAttribute('aria-label', `${label}: ${value}`);
+    const show = () => {
+      svg.querySelectorAll('.hit.on').forEach(h => h.classList.remove('on'));
+      hit.classList.add('on');
+      showTip(box, cx, e?.kept ? y(1) : y(0), value, label);
+    };
+    hit.addEventListener('pointerenter', show);
+    hit.addEventListener('focus', show);
+    hit.addEventListener('blur', () => { hit.classList.remove('on'); hideTip(box); });
+  });
+
+  addDateLabels(svg, days, i => m.l + band * i + band / 2, H - 6, m.l, W - m.r);
+  svg.addEventListener('pointerleave', () => {
+    svg.querySelectorAll('.hit.on').forEach(h => h.classList.remove('on'));
+    hideTip(box);
+  });
+  box.replaceChildren(svg);
+}
+
+function drawStreak(box, days, series) {
+  const W = box.clientWidth, H = 180;
+  const m = { t: 16, r: 58, b: 26, l: 30 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const top = Math.max(3, ...series);
+  const n = days.length;
+  const x = i => (n === 1 ? m.l + pw / 2 : m.l + (i * pw) / (n - 1));
+  const y = v => m.t + (1 - v / top) * ph;
+  const svg = svgEl('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': 'Streak over time chart' });
+
+  for (const t of [0, top]) {
+    svg.appendChild(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), class: t === 0 ? 'axis' : 'grid' }));
+    addTick(svg, m.l - 6, y(t) + 3.5, String(t));
+  }
+
+  const pts = series.map((v, i) => `${x(i)},${y(v)}`);
+  svg.appendChild(svgEl('path', { d: `M${x(0)},${y(0)} L${pts.join(' L')} L${x(n - 1)},${y(0)} Z`, class: 'area' }));
+  svg.appendChild(svgEl('path', { d: `M${pts.join(' L')}`, class: 'line' }));
+  svg.appendChild(svgEl('circle', { cx: x(n - 1), cy: y(series[n - 1]), r: 4, class: 'end-dot' }));
+  const last = series[n - 1];
+  const end = svgEl('text', { x: x(n - 1) + 9, y: y(last) + 4, class: 'end-label' });
+  end.textContent = `${last} day${last === 1 ? '' : 's'}`;
+  svg.appendChild(end);
+
+  // Crosshair snaps to the nearest day
+  const cross = svgEl('line', { y1: m.t, y2: m.t + ph, class: 'crosshair', visibility: 'hidden' });
+  const dot = svgEl('circle', { r: 4, class: 'hover-dot', visibility: 'hidden' });
+  const overlay = svgEl('rect', { x: m.l - 6, y: m.t, width: pw + 12, height: ph, class: 'overlay', tabindex: 0, 'aria-label': 'Streak by day. Use the arrow keys to move between days.' });
+  svg.append(cross, dot, overlay);
+  let current = n - 1;
+  const showAt = i => {
+    current = Math.max(0, Math.min(n - 1, i));
+    const cx = x(current), cy = y(series[current]);
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('visibility', 'visible');
+    const v = series[current];
+    showTip(box, cx, cy, `${v}-day streak`, `${prettyDate(days[current])} · ${resultText(entries[days[current]])}`);
+  };
+  const hide = () => { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); hideTip(box); };
+  overlay.addEventListener('pointermove', e => {
+    const px = e.clientX - svg.getBoundingClientRect().left;
+    showAt(n === 1 ? 0 : Math.round(((px - m.l) / pw) * (n - 1)));
+  });
+  overlay.addEventListener('pointerleave', hide);
+  overlay.addEventListener('focus', () => showAt(current));
+  overlay.addEventListener('blur', hide);
+  overlay.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); showAt(current - 1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); showAt(current + 1); }
+  });
+
+  addDateLabels(svg, days, x, H - 6, m.l, W - m.r);
+  box.replaceChildren(svg);
+}
+
+let resizeTimer;
+addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if ($('#view-calendar').classList.contains('active')) drawCharts();
+  }, 150);
+});
 
 // ---------- Start ----------
 (async function init() {
