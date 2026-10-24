@@ -29,6 +29,7 @@ html, body { margin: 0; min-height: 100%; }
 body {
   background: var(--paper);
   color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -382,15 +383,19 @@ button.day.off, button.day.locked { cursor: not-allowed; }
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: 32px; transform: translate(-50%, 200%);
+  position: fixed; left: 50%; bottom: 32px; transform: translate(-50%, calc(100% + 48px)); visibility: hidden;
   background: var(--ink); color: var(--paper); padding: 12px 20px; font-family: var(--mono); font-size: 12px;
-  transition: transform 0.4s var(--ease); z-index: 95;
+  width: max-content; max-width: calc(100vw - 32px); text-align: center;
+  transition: transform 0.4s var(--ease), visibility 0s 0.4s; z-index: 95;
 }
-.toast.show { transform: translate(-50%, 0); }
+.toast.show { transform: translate(-50%, 0); visibility: visible; transition: transform 0.4s var(--ease); }
 
 @media (max-width: 680px) {
   .frame { inset: 6px; }
   .corner.bl, .corner.br { display: none; }
+  .corner.tl { max-width: 45%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .day .marks { font-size: 0.95rem; letter-spacing: -0.06em; margin-top: 8px; }
+  .yesno .answer-word { font-size: 3.6rem; }
   .view { padding: 40px 16px 48px; }
   .index-row { grid-template-columns: 40px 1fr 32px; padding: 24px 4px; }
   .index-desc { display: none; }
