@@ -671,3 +671,4 @@ main { transition: filter 0.8s ease; }
 @media (max-width: 680px) {
   .done-art:has(.moment-gif) { width: min(240px, 66vw); }
 }
+.done-art .moment-gif.sad-gif { box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.8); }

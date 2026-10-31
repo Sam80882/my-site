@@ -648,12 +648,13 @@ function showDetail(justSaved, justLocked = false) {
   $('#lock-note').hidden = !!entry.locked || canLock(targetKey);
   $('#lock-note-text').textContent = 'You can lock this day from tomorrow, in the calendar.';
   const art = $('#done-art');
-  if (justSaved && entry.kept && !entry.locked) {
-    // "Nicely done" gets a round of applause instead of the trophy
-    art.innerHTML = '<div class="art-halo" style="background:var(--amber)"></div>';
-    const clap = gifFigure(CLAP_GIF);
-    clap.classList.add('art-pop');
-    art.appendChild(clap);
+  if (justSaved && !entry.locked) {
+    // Right after saving: applause for "Nicely done", tears for "Tomorrow is a fresh page"
+    art.innerHTML = entry.kept ? '<div class="art-halo" style="background:var(--amber)"></div>' : '';
+    const gif = gifFigure(entry.kept ? CLAP_GIF : CRY_GIF);
+    gif.classList.add('art-pop');
+    if (!entry.kept) gif.classList.add('sad-gif');
+    art.appendChild(gif);
   } else {
     art.innerHTML = artFor(justLocked ? 'locked' : entry.kept ? 'kept' : entry.count >= 2 ? 'worse' : 'bad');
   }
@@ -797,6 +798,7 @@ const giphy = (id, alt, ratio, width) => ({
   width
 });
 const CLAP_GIF = giphy('fDbzXb6Cv5L56', 'Applause', '1 / 1', '100%');
+const CRY_GIF = giphy('4vQyO4VgU8XngKKhDx', 'Crying', '470 / 480', '100%');
 const SAD_GIF = giphy('78EYl1VZVA9KE', 'A sad, teary face', '289 / 283', 'min(320px, 76vw)');
 const CHEER_GIF = giphy('11sBLVxNs7v6WA', 'Minions cheering', '500 / 226');
 const FACEPALM_GIF = giphy('58FqDYgcQhrdSj5oUJ', 'A facepalm', '480 / 260');
