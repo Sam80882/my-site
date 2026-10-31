@@ -482,7 +482,10 @@ function renderHub() {
   const today = entries[todayKey()];
   const status = $('#today-status');
   status.className = `today-status ${!today ? '' : today.kept ? 'kept' : 'broken'}`;
-  status.textContent = !today ? 'Today: not updated yet — open Today’s update below.'
+  const days = Math.round((parseKey(startKey) - parseKey(todayKey())) / 864e5);
+  status.textContent = days > 0
+    ? `Tracking starts ${days === 1 ? 'tomorrow' : `in ${days} days`} — ${prettyDate(startKey, { weekday: 'long', day: 'numeric', month: 'long' })}.`
+    : !today ? 'Today: not updated yet — open Today’s update below.'
     : today.kept ? 'Today: kept ✓ — nice work.'
     : `Today: ${marksOf(today)} — tomorrow is a fresh page.`;
 
@@ -919,7 +922,11 @@ async function momentNo() {
 
 // ---------- Calendar ----------
 const firstMonth = () => startOfMonth(parseKey(startKey));
-const lastMonth = () => startOfMonth(new Date());
+// Up to this month, or the start month if tracking hasn't begun yet
+const lastMonth = () => {
+  const now = startOfMonth(new Date());
+  return firstMonth() > now ? firstMonth() : now;
+};
 
 $('#prev-month').addEventListener('click', () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCalendar(); });
 $('#next-month').addEventListener('click', () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCalendar(); });

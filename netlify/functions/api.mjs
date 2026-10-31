@@ -5,7 +5,7 @@
 //   SESSION_SECRET                               optional; signs login cookies (derived from the login if unset)
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
-const START_DATE = '2026-10-24';   // first day that can be tracked
+const START_DATE = '2026-11-01';   // first day that can be tracked
 const TIMEZONE = 'Asia/Kolkata';   // what "today" means
 const SESSION_DAYS = 7;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
