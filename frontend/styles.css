@@ -655,3 +655,18 @@ main { transition: filter 0.8s ease; }
   .answer-icon { width: 44px; height: 44px; }
   .medal { transform: scale(0.85); }
 }
+
+/* Cheering GIF in the Yes moment */
+.moment-gif {
+  position: relative; margin: 4px 0; width: min(340px, 78vw); border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--rule); box-shadow: 0 18px 50px -12px rgba(255, 194, 92, 0.35);
+}
+.moment-gif video, .moment-gif img { display: block; width: 100%; aspect-ratio: 500 / 226; object-fit: cover; background: #000; }
+.moment-gif figcaption {
+  position: absolute; right: 8px; bottom: 6px; padding: 2px 6px; border-radius: 4px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.85); background: rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 680px) {
+  .moment-gif { width: min(260px, 72vw); }
+  .moment .medal { transform: scale(0.75); margin: -20px 0; }
+}

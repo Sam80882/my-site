@@ -778,6 +778,35 @@ function burstConfetti() {
   }
 }
 
+// Cheering GIF for the Yes moment, served by Giphy (video version is far lighter than the .gif)
+const CHEER_GIF = {
+  video: 'https://media.giphy.com/media/11sBLVxNs7v6WA/giphy.mp4',
+  still: 'https://media.giphy.com/media/11sBLVxNs7v6WA/giphy_s.gif',
+  page: 'https://giphy.com/gifs/cheer-cheering-11sBLVxNs7v6WA'
+};
+
+function cheerGif() {
+  const fig = document.createElement('figure');
+  fig.className = 'moment-gif';
+  let media;
+  if (reducedMotion()) {
+    media = document.createElement('img');
+    media.src = CHEER_GIF.still;
+    media.alt = 'Minions cheering';
+  } else {
+    media = document.createElement('video');
+    // Muted before the source is set, so phones allow autoplay
+    Object.assign(media, { muted: true, autoplay: true, loop: true, playsInline: true, poster: CHEER_GIF.still });
+    media.src = CHEER_GIF.video;
+    media.setAttribute('aria-label', 'Minions cheering');
+  }
+  media.addEventListener('error', () => fig.remove()); // offline or blocked: just skip it
+  const credit = document.createElement('figcaption');
+  credit.textContent = 'via GIPHY';
+  fig.append(media, credit);
+  return fig;
+}
+
 const MILESTONES = { 3: 'Three in a row!', 7: 'One full week!', 14: 'Two weeks strong!', 21: '21 days — a habit is forming!', 30: 'A whole month!', 50: 'Fifty days!', 100: 'One hundred days!' };
 
 // Yes: a medal drops in, spins, and the streak ticks up with confetti
@@ -792,7 +821,8 @@ async function momentYes(n) {
     <h2 class="moment-title">Day ${n} <em>streak</em></h2>
     ${milestone ? `<p class="moment-milestone">${milestone}</p>` : ''}
     <p class="moment-sub">${n === 1 ? 'Every streak starts with day one. You just started yours.' : 'You showed up again. Keep the chain going.'}</p>`;
-  const shown = holdMoment(3400);
+  stage.querySelector('.moment-title').after(cheerGif());
+  const shown = holdMoment(5000);
   if (reducedMotion()) {
     $('#medal-num').textContent = n;
   } else {
@@ -801,6 +831,10 @@ async function momentYes(n) {
       { duration: 1100, easing: 'cubic-bezier(.2,.9,.25,1.1)' }
     );
     fadeUp([...stage.querySelectorAll('.moment-kicker, .moment-title, .moment-milestone, .moment-sub')], 700);
+    stage.querySelector('.moment-gif')?.animate(
+      [{ opacity: 0, transform: 'scale(0.6) rotate(-6deg)' }, { opacity: 1, transform: 'none' }],
+      { duration: 700, delay: 1000, easing: 'cubic-bezier(.2,1.4,.4,1)', fill: 'backwards' }
+    );
     setTimeout(() => {
       const num = $('#medal-num');
       if (!num) return;
