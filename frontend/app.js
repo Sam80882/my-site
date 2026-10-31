@@ -979,12 +979,12 @@ function renderStats() {
   const tile = (no, value, label, delay, color, hint) =>
     `<div class="stat" style="animation-delay:${delay}ms;--c:var(--${color})"><div class="label">${no} — ${label}</div><div class="value">${value}</div><p class="stat-hint">${hint}</p></div>`;
   $('#stats').innerHTML = `
-    <div class="stat feature">
-      <div class="label">i — Success rate</div>
-      <div class="value">${s.rate}<small>%</small></div>
-      <div>
-        <div class="bar"><span style="transform:scaleX(${s.rate / 100})"></span></div>
-        <p class="bar-caption">${s.kept} of ${s.logged} updated days kept. Higher is better.</p>
+    <div class="stat pie-card">
+      <div class="label">i — How your days went</div>
+      <p class="stat-hint">Every day since you started. The middle shows how many of your updated days were kept — higher is better.</p>
+      <div class="pie-wrap">
+        <div class="chart pie" id="chart-pie"></div>
+        <ul class="pie-legend" id="pie-legend"></ul>
       </div>
     </div>
     ${tile('ii', s.current, 'Current streak', 60, 'amber', 'Green days in a row, up to today.')}
@@ -1113,6 +1113,7 @@ function drawCharts() {
     return;
   }
   const series = streakSeries(days);
+  drawPie($('#chart-pie'), $('#pie-legend'));
   drawDaily(daily, days);
   drawStreak(streak, days, series);
 
@@ -1126,6 +1127,81 @@ function drawCharts() {
     return tr;
   });
   $('#chart-table').replaceChildren(...rows);
+}
+
+// Donut of every day since the start: kept / broke once / broke 2+ / not updated, success rate in the middle
+function drawPie(box, legend) {
+  const counts = { kept: 0, once: 0, multi: 0, none: 0 };
+  for (let d = parseKey(startKey); dateKey(d) <= todayKey(); d = addDays(d, 1)) {
+    const e = entries[dateKey(d)];
+    if (!e) counts.none++;
+    else if (e.kept) counts.kept++;
+    else if (e.count >= 2) counts.multi++;
+    else counts.once++;
+  }
+  const parts = [
+    { key: 'kept', label: 'Kept', color: 'var(--green)', n: counts.kept },
+    { key: 'once', label: 'Broke once', color: 'var(--red)', n: counts.once },
+    { key: 'multi', label: 'Broke 2+ times', color: 'var(--x2)', n: counts.multi },
+    { key: 'none', label: 'Not updated', color: 'var(--pie-empty)', n: counts.none }
+  ];
+  const total = parts.reduce((s, p) => s + p.n, 0);
+  const logged = total - counts.none;
+  const rate = logged ? Math.round((counts.kept / logged) * 100) : 0;
+  const pct = n => (total ? Math.round((n * 100) / total) : 0);
+
+  const size = 200, c = size / 2, R = 92, r = 62;
+  const svg = svgEl('svg', { width: size, height: size, viewBox: `0 0 ${size} ${size}`, role: 'group', 'aria-label': 'How your days went' });
+  const point = (a, rad) => [c + rad * Math.cos(a), c + rad * Math.sin(a)];
+  let start = -Math.PI / 2;
+  parts.filter(p => p.n > 0).forEach(p => {
+    const sweep = (p.n / total) * Math.PI * 2;
+    let slice;
+    if (sweep >= Math.PI * 2 - 1e-6) {
+      // One category covers every day: draw a full ring
+      slice = svgEl('path', { d: `M${c - R},${c} a${R},${R} 0 1,0 ${2 * R},0 a${R},${R} 0 1,0 ${-2 * R},0 M${c - r},${c} a${r},${r} 0 1,1 ${2 * r},0 a${r},${r} 0 1,1 ${-2 * r},0`, 'fill-rule': 'evenodd' });
+    } else {
+      const end = start + sweep;
+      const large = sweep > Math.PI ? 1 : 0;
+      const [x1, y1] = point(start, R), [x2, y2] = point(end, R), [x3, y3] = point(end, r), [x4, y4] = point(start, r);
+      slice = svgEl('path', { d: `M${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${r},${r} 0 ${large} 0 ${x4},${y4} Z` });
+    }
+    slice.setAttribute('class', 'pie-slice');
+    slice.style.fill = p.color;
+    slice.setAttribute('tabindex', 0);
+    const value = `${p.n} day${p.n === 1 ? '' : 's'} · ${pct(p.n)}%`;
+    slice.setAttribute('aria-label', `${p.label}: ${value}`);
+    const mid = start + sweep / 2;
+    const [tx, ty] = point(mid, R);
+    const show = () => showTip(box, tx, ty, value, p.label);
+    slice.addEventListener('pointerenter', show);
+    slice.addEventListener('focus', show);
+    slice.addEventListener('pointerleave', () => hideTip(box));
+    slice.addEventListener('blur', () => hideTip(box));
+    svg.appendChild(slice);
+    start += sweep;
+  });
+
+  const middle = document.createElement('div');
+  middle.className = 'pie-middle';
+  const big = document.createElement('strong');
+  big.textContent = logged ? `${rate}%` : '—';
+  const small = document.createElement('span');
+  small.textContent = logged ? 'of updated days kept' : 'no days yet';
+  middle.append(big, small);
+  box.replaceChildren(svg, middle);
+
+  legend.replaceChildren(...parts.map(p => {
+    const li = document.createElement('li');
+    const sw = document.createElement('i');
+    sw.style.background = p.color;
+    const name = document.createElement('span');
+    name.textContent = p.label;
+    const num = document.createElement('b');
+    num.textContent = `${p.n} · ${pct(p.n)}%`;
+    li.append(sw, name, num);
+    return li;
+  }));
 }
 
 function drawDaily(box, days) {

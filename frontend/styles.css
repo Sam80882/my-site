@@ -16,6 +16,8 @@
   --coral: #ff8a5c;
   --amber: #ffc25c;
   --teal: #4fd1b8;
+  --x2: #7b5cd6;                       /* broke 2+ times in charts (validated against the dark page) */
+  --pie-empty: rgba(242, 239, 232, 0.12);
   --accent: linear-gradient(100deg, var(--violet), var(--pink) 55%, var(--amber));
   --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
   --sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -405,7 +407,7 @@ button.day.off, button.day.locked { cursor: not-allowed; }
   .confirm-box { flex-direction: column; align-items: flex-start; }
   .stats { grid-template-columns: 1fr 1fr; }
   .stat:not(:nth-child(3n + 2)) { border-left: 0; }
-  .stat:nth-child(odd):not(.feature):not(.wide) { border-left: 1px solid var(--rule); }
+  .stat:nth-child(odd):not(.feature):not(.wide):not(.pie-card) { border-left: 1px solid var(--rule); }
   .stat { padding: 18px 12px; }
   .strip { gap: 2px; }
   .orbit { width: 140px; height: 140px; }
@@ -672,3 +674,22 @@ main { transition: filter 0.8s ease; }
   .done-art:has(.moment-gif) { width: min(240px, 66vw); }
 }
 .done-art .moment-gif.sad-gif { box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.8); }
+
+/* ---------- Stats: donut of how the days went ---------- */
+.stat.pie-card { grid-column: 1 / -1; border-left: 0; }
+.pie-wrap { display: flex; align-items: center; gap: 36px; margin-top: 18px; flex-wrap: wrap; }
+.chart.pie { position: relative; width: 200px; height: 200px; margin: 0; flex: none; }
+.pie-slice { stroke: var(--paper); stroke-width: 2; outline: none; transition: opacity 0.2s; cursor: default; }
+.pie:has(.pie-slice:hover) .pie-slice:not(:hover), .pie:has(.pie-slice:focus-visible) .pie-slice:not(:focus-visible) { opacity: 0.45; }
+.pie-middle { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.pie-middle strong { font-family: var(--serif); font-size: 2.4rem; font-weight: 500; line-height: 1; }
+.pie-middle span { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin-top: 6px; max-width: 100px; text-align: center; line-height: 1.35; }
+.pie-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 220px; }
+.pie-legend li { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.pie-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.pie-legend span { color: var(--ink); }
+.pie-legend b { font-family: var(--mono); font-weight: 400; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+@media (max-width: 680px) {
+  .pie-wrap { justify-content: center; gap: 24px; }
+  .pie-legend { width: 100%; }
+}
