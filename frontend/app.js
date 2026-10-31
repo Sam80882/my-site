@@ -994,6 +994,11 @@ function renderStats() {
         <ul class="pie-legend" id="pie-legend"></ul>
       </div>
     </div>
+    <div class="stat board-card" style="animation-delay:40ms">
+      <div class="label">★ — Leaderboard</div>
+      <p class="stat-hint">How everyone is doing — only totals, never anyone’s days. Ranked by consistency (share of updated days kept), then current streak.</p>
+      <ol class="board" id="board"><li class="board-empty">Loading…</li></ol>
+    </div>
     ${tile('ii', s.current, 'Current streak', 60, 'amber', 'Green days in a row, up to today.')}
     ${tile('iii', s.best, 'Highest streak', 120, 'violet', 'Your longest run of green days. It stays even after a break.')}
     ${tile('iv', s.kept, 'Green days', 180, 'teal', 'Days you kept the streak.')}
@@ -1121,6 +1126,7 @@ function drawCharts() {
   }
   const series = streakSeries(days);
   drawPie($('#chart-pie'), $('#pie-legend'));
+  loadBoard();
   drawDaily(daily, days);
   drawStreak(streak, days, series);
 
@@ -1134,6 +1140,76 @@ function drawCharts() {
     return tr;
   });
   $('#chart-table').replaceChildren(...rows);
+}
+
+// ---------- Leaderboard: everyone's totals, fetched fresh (cached briefly while paging months) ----------
+let boardCache = null;
+
+async function loadBoard() {
+  const box = $('#board');
+  if (!box) return;
+  try {
+    if (!boardCache || Date.now() - boardCache.at > 20000) {
+      boardCache = { at: Date.now(), data: await api('/api/leaderboard') };
+    }
+    renderBoard(box, boardCache.data);
+  } catch {
+    box.innerHTML = '<li class="board-empty">Couldn’t load the leaderboard right now.</li>';
+  }
+}
+
+const displayName = n => n.charAt(0).toUpperCase() + n.slice(1);
+
+function renderBoard(box, { you, people }) {
+  const ranked = people.slice().sort((a, b) =>
+    (b.logged > 0) - (a.logged > 0) || b.rate - a.rate || b.current - a.current || b.best - a.best || b.logged - a.logged);
+  const best = key => {
+    const top = Math.max(0, ...people.filter(p => p.logged).map(p => p[key]));
+    return top > 0 ? top : null;
+  };
+  const topRate = best('rate'), topNow = best('current'), topEver = best('best');
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  const head = el('li', 'board-row board-head');
+  head.append(el('span', 'board-rank', '#'), el('span', 'board-who', 'Who'), el('span', 'board-num', 'Kept'),
+    el('span', 'board-num', 'Streak'), el('span', 'board-num', 'Best'), el('span', 'board-num', 'X'));
+
+  const rows = ranked.map((p, i) => {
+    const li = el('li', `board-row${p.name === you ? ' me' : ''}`);
+    const who = el('span', 'board-who');
+    const name = el('strong', null, displayName(p.name));
+    if (p.name === you) name.appendChild(el('em', 'board-you', 'you'));
+    const badges = el('span', 'board-badges');
+    if (p.logged && topRate !== null && p.rate === topRate) badges.appendChild(el('i', 'badge b-consistent', '👑 Most consistent'));
+    if (topNow !== null && p.current === topNow) badges.appendChild(el('i', 'badge b-now', '🔥 Longest streak now'));
+    if (topEver !== null && p.best === topEver) badges.appendChild(el('i', 'badge b-ever', '🏆 Best streak ever'));
+    const bar = el('span', 'board-bar');
+    const fill = el('span');
+    fill.style.width = `${p.rate}%`;
+    bar.appendChild(fill);
+    who.append(name, badges, bar);
+    const num = (v, label) => {
+      const n = el('span', 'board-num', v);
+      n.dataset.label = label;
+      return n;
+    };
+    li.append(
+      el('span', 'board-rank', p.logged ? String(i + 1) : '–'),
+      who,
+      num(p.logged ? `${p.rate}%` : '—', 'Kept'),
+      num(String(p.current), 'Streak'),
+      num(String(p.best), 'Best'),
+      num(p.x ? `−${p.x}` : '0', 'X')
+    );
+    if (!p.logged) li.title = 'No days updated yet';
+    return li;
+  });
+  box.replaceChildren(head, ...rows);
 }
 
 // Donut of every day since the start: kept / broke once / broke 2+ / not updated, success rate in the middle

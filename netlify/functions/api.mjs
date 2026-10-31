@@ -1,16 +1,27 @@
 // Streak API on Netlify Functions. Data lives in the Supabase table daily_entries; secrets come from
 // environment variables (kept out of the public repo):
-//   STREAK_USERNAME, STREAK_PASSWORD             (required) the site login
+//   STREAK_USERS                                 login IDs, comma-separated, e.g. "sharath,anil,ravi"
+//                                                (falls back to the single STREAK_USERNAME)
+//   STREAK_PASSWORD                              (required) the password every account shares
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY      (required) server-only database access; RLS stays on with no policies
-//   SESSION_SECRET                               optional; signs login cookies (derived from the login if unset)
+//   SESSION_SECRET                               optional; signs login cookies (derived from the password if unset)
+// Every row carries its owner's username, and every query is filtered by the logged-in user, so accounts never mix.
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 const START_DATE = '2026-11-01';   // first day that can be tracked
 const TIMEZONE = 'Asia/Kolkata';   // what "today" means
 const SESSION_DAYS = 7;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const USER_RE = /^[a-z0-9_.-]{1,32}$/;
 
 const env = name => (process.env[name] || '').trim();
+
+function users() {
+  return (env('STREAK_USERS') || env('STREAK_USERNAME'))
+    .split(',')
+    .map(u => u.trim().toLowerCase())
+    .filter(u => USER_RE.test(u));
+}
 
 function todayKey() {
   // en-CA formats dates as YYYY-MM-DD
@@ -21,6 +32,12 @@ function isRealDate(k) {
   if (!DATE_RE.test(k)) return false;
   const d = new Date(`${k}T00:00:00Z`);
   return !isNaN(d) && d.toISOString().slice(0, 10) === k;
+}
+
+function addDaysKey(k, n) {
+  const d = new Date(`${k}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 function json(status, body, headers = {}) {
@@ -37,29 +54,31 @@ function sameText(a, b) {
   return timingSafeEqual(ha, hb);
 }
 
-// ---------- Sessions: signed cookie, no server-side state ----------
+// ---------- Sessions: signed cookie naming the user, no server-side state ----------
 function secret() {
-  return env('SESSION_SECRET') || createHash('sha256').update(`streak:${env('STREAK_USERNAME')}:${env('STREAK_PASSWORD')}`).digest('hex');
+  return env('SESSION_SECRET') || createHash('sha256').update(`streak:${env('STREAK_PASSWORD')}`).digest('hex');
 }
 
 function sign(payload) {
   return createHmac('sha256', secret()).update(payload).digest('base64url');
 }
 
-function newSessionCookie() {
-  const payload = Buffer.from(JSON.stringify({ exp: Date.now() + SESSION_DAYS * 864e5 })).toString('base64url');
+function newSessionCookie(user) {
+  const payload = Buffer.from(JSON.stringify({ u: user, exp: Date.now() + SESSION_DAYS * 864e5 })).toString('base64url');
   return `sid=${payload}.${sign(payload)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_DAYS * 86400}`;
 }
 
-function isLoggedIn(req) {
+// The logged-in username, or null
+function sessionUser(req) {
   const match = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.get('cookie') || '');
-  if (!match) return false;
+  if (!match) return null;
   const [payload, sig] = match[1].split('.');
-  if (!payload || !sig || !sameText(sig, sign(payload))) return false;
+  if (!payload || !sig || !sameText(sig, sign(payload))) return null;
   try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString()).exp > Date.now();
+    const { u, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    return exp > Date.now() && users().includes(u) ? u : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -81,6 +100,8 @@ async function db(query, options = {}) {
   return res.json();
 }
 
+const byUser = user => `username=eq.${encodeURIComponent(user)}`;
+
 // Row in the table -> the shape the frontend uses
 function toEntry(row) {
   const entry = row.kept ? { kept: true } : { kept: false, count: row.count };
@@ -88,22 +109,61 @@ function toEntry(row) {
   return entry;
 }
 
-async function loadEntries() {
-  const rows = await db('?select=entry_date,kept,count,locked&order=entry_date');
+async function loadEntries(user) {
+  const rows = await db(`?select=entry_date,kept,count,locked&${byUser(user)}&entry_date=gte.${START_DATE}&order=entry_date`);
   return Object.fromEntries(rows.map(r => [r.entry_date, toEntry(r)]));
 }
 
-async function getEntry(date) {
-  const rows = await db(`?select=entry_date,kept,count,locked&entry_date=eq.${date}`);
+async function getEntry(user, date) {
+  const rows = await db(`?select=entry_date,kept,count,locked&${byUser(user)}&entry_date=eq.${date}`);
   return rows[0] ? toEntry(rows[0]) : null;
 }
 
 // Updates only touch unlocked rows, so a locked day can never change
-async function writeEntry(date, fields, exists) {
+async function writeEntry(user, date, fields, exists) {
   const rows = exists
-    ? await db(`?entry_date=eq.${date}&locked=is.false`, { method: 'PATCH', body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }) })
-    : await db('', { method: 'POST', body: JSON.stringify({ entry_date: date, ...fields }) });
+    ? await db(`?${byUser(user)}&entry_date=eq.${date}&locked=is.false`, { method: 'PATCH', body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }) })
+    : await db('', { method: 'POST', body: JSON.stringify({ username: user, entry_date: date, ...fields }) });
   return rows[0] ? toEntry(rows[0]) : null;
+}
+
+// ---------- Leaderboard: totals only, never anyone's individual days ----------
+function summarise(entries, today) {
+  const keys = Object.keys(entries).sort();
+  let kept = 0, x = 0;
+  for (const k of keys) {
+    if (entries[k].kept) kept++;
+    else x += entries[k].count;
+  }
+  const logged = keys.length;
+
+  // Current streak: green days in a row up to today (today still counts as open until it's answered)
+  let current = 0;
+  let d = today;
+  if (entries[d] && !entries[d].kept) d = null;
+  else if (!entries[d]) d = addDaysKey(d, -1);
+  while (d && entries[d]?.kept) { current++; d = addDaysKey(d, -1); }
+
+  // Best streak: longest run of consecutive green days
+  let best = 0, run = 0, prev = null;
+  for (const k of keys) {
+    if (!entries[k].kept) { run = 0; prev = null; continue; }
+    run = prev && addDaysKey(prev, 1) === k ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = k;
+  }
+
+  return { kept, broken: logged - kept, logged, x, rate: logged ? Math.round((kept / logged) * 100) : 0, current, best };
+}
+
+async function leaderboard() {
+  const people = users();
+  const rows = await db(`?select=username,entry_date,kept,count&entry_date=gte.${START_DATE}&order=entry_date`);
+  const today = todayKey();
+  return people.map(name => {
+    const mine = Object.fromEntries(rows.filter(r => r.username === name).map(r => [r.entry_date, toEntry(r)]));
+    return { name, ...summarise(mine, today) };
+  });
 }
 
 async function readBody(req) {
@@ -113,10 +173,9 @@ async function readBody(req) {
 }
 
 export default async (req) => {
-  const username = env('STREAK_USERNAME');
   const password = env('STREAK_PASSWORD');
-  if (!username || !password) {
-    return json(500, { error: 'Server is missing STREAK_USERNAME / STREAK_PASSWORD settings' });
+  if (!users().length || !password) {
+    return json(500, { error: 'Server is missing STREAK_USERS / STREAK_PASSWORD settings' });
   }
   if (!env('SUPABASE_URL') || !env('SUPABASE_SERVICE_ROLE_KEY')) {
     return json(500, { error: 'Server is missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY settings' });
@@ -128,27 +187,34 @@ export default async (req) => {
   try {
     if (path === '/api/login' && method === 'POST') {
       const body = await readBody(req);
-      if (sameText(body.username ?? '', username) && sameText(body.password ?? '', password)) {
-        return json(200, { username, startDate }, { 'Set-Cookie': newSessionCookie() });
+      const name = String(body.username ?? '').trim().toLowerCase();
+      // Check every account so timing doesn't reveal which IDs exist
+      const known = users().reduce((hit, u) => sameText(name, u) || hit, false);
+      if (known && sameText(body.password ?? '', password)) {
+        return json(200, { username: name, startDate }, { 'Set-Cookie': newSessionCookie(name) });
       }
       await new Promise(r => setTimeout(r, 600)); // slow down guessing
       return json(401, { error: 'Wrong login ID or password' });
     }
 
-    const loggedIn = isLoggedIn(req);
+    const user = sessionUser(req);
 
     if (path === '/api/session' && method === 'GET') {
-      return json(200, loggedIn ? { loggedIn: true, username, startDate } : { loggedIn: false });
+      return json(200, user ? { loggedIn: true, username: user, startDate } : { loggedIn: false });
     }
 
-    if (!loggedIn) return json(401, { error: 'Not logged in' });
+    if (!user) return json(401, { error: 'Not logged in' });
 
     if (path === '/api/logout' && method === 'POST') {
       return json(200, { ok: true }, { 'Set-Cookie': 'sid=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0' });
     }
 
     if (path === '/api/entries' && method === 'GET') {
-      return json(200, await loadEntries());
+      return json(200, await loadEntries(user));
+    }
+
+    if (path === '/api/leaderboard' && method === 'GET') {
+      return json(200, { you: user, people: await leaderboard() });
     }
 
     const m = /^\/api\/entries\/(\d{4}-\d{2}-\d{2})(\/lock)?$/.exec(path);
@@ -159,7 +225,7 @@ export default async (req) => {
       if (date < startDate || date > today) {
         return json(400, { error: `Only days from ${startDate} to today can be updated` });
       }
-      const existing = await getEntry(date);
+      const existing = await getEntry(user, date);
       const lockedError = () => json(409, { error: 'This day is locked and can no longer be changed' });
       if (existing?.locked) return lockedError();
 
@@ -168,7 +234,7 @@ export default async (req) => {
         if (method !== 'POST') return json(405, { error: 'Use POST to lock' });
         if (!existing) return json(400, { error: 'Update this day before locking it' });
         if (date >= today) return json(400, { error: 'A day can only be locked after it is over' });
-        const locked = await writeEntry(date, { locked: true }, true);
+        const locked = await writeEntry(user, date, { locked: true }, true);
         return locked ? json(200, locked) : lockedError();
       }
 
@@ -186,7 +252,7 @@ export default async (req) => {
       } else {
         return json(400, { error: '"kept" must be true or false' });
       }
-      const saved = await writeEntry(date, fields, !!existing);
+      const saved = await writeEntry(user, date, fields, !!existing);
       return saved ? json(200, saved) : lockedError();
     }
 
