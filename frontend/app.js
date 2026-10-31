@@ -585,6 +585,7 @@ async function saveDay(body, btn) {
   try {
     entries[targetKey] = await api(`/api/entries/${targetKey}`, { method: 'PUT', body: JSON.stringify(body) });
     if (body.kept) await momentYes(streakAt(targetKey));
+    else if (body.count === 1) await momentOneSlip();
     showDetail(true);
   } catch (err) {
     toast(err.message);
@@ -778,28 +779,32 @@ function burstConfetti() {
   }
 }
 
-// Cheering GIF for the Yes moment, served by Giphy (video version is far lighter than the .gif)
-const CHEER_GIF = {
-  video: 'https://media.giphy.com/media/11sBLVxNs7v6WA/giphy.mp4',
-  still: 'https://media.giphy.com/media/11sBLVxNs7v6WA/giphy_s.gif',
-  page: 'https://giphy.com/gifs/cheer-cheering-11sBLVxNs7v6WA'
-};
+// GIFs for the moments, served by Giphy (the video versions are far lighter than the .gif files)
+const giphy = (id, alt, ratio) => ({
+  video: `https://media.giphy.com/media/${id}/giphy.mp4`,
+  still: `https://media.giphy.com/media/${id}/giphy_s.gif`,
+  alt,
+  ratio
+});
+const CHEER_GIF = giphy('11sBLVxNs7v6WA', 'Minions cheering', '500 / 226');
+const FACEPALM_GIF = giphy('58FqDYgcQhrdSj5oUJ', 'A facepalm', '480 / 260');
 
-function cheerGif() {
+function gifFigure(gif) {
   const fig = document.createElement('figure');
   fig.className = 'moment-gif';
   let media;
   if (reducedMotion()) {
     media = document.createElement('img');
-    media.src = CHEER_GIF.still;
-    media.alt = 'Minions cheering';
+    media.src = gif.still;
+    media.alt = gif.alt;
   } else {
     media = document.createElement('video');
     // Muted before the source is set, so phones allow autoplay
-    Object.assign(media, { muted: true, autoplay: true, loop: true, playsInline: true, poster: CHEER_GIF.still });
-    media.src = CHEER_GIF.video;
-    media.setAttribute('aria-label', 'Minions cheering');
+    Object.assign(media, { muted: true, autoplay: true, loop: true, playsInline: true, poster: gif.still });
+    media.src = gif.video;
+    media.setAttribute('aria-label', gif.alt);
   }
+  media.style.aspectRatio = gif.ratio;
   media.addEventListener('error', () => fig.remove()); // offline or blocked: just skip it
   const credit = document.createElement('figcaption');
   credit.textContent = 'via GIPHY';
@@ -821,7 +826,7 @@ async function momentYes(n) {
     <h2 class="moment-title">Day ${n} <em>streak</em></h2>
     ${milestone ? `<p class="moment-milestone">${milestone}</p>` : ''}
     <p class="moment-sub">${n === 1 ? 'Every streak starts with day one. You just started yours.' : 'You showed up again. Keep the chain going.'}</p>`;
-  stage.querySelector('.moment-title').after(cheerGif());
+  stage.querySelector('.moment-title').after(gifFigure(CHEER_GIF));
   const shown = holdMoment(5000);
   if (reducedMotion()) {
     $('#medal-num').textContent = n;
@@ -844,6 +849,29 @@ async function momentYes(n) {
     }, 950);
   }
   await shown;
+}
+
+// Saved as broken just once: a facepalm, then on to the result
+async function momentOneSlip() {
+  const m = $('#moment');
+  const stage = $('#moment-stage');
+  m.classList.add('sad');
+  stage.innerHTML = `
+    <p class="moment-kicker">One X today</p>
+    <h2 class="moment-title">Just <em>once.</em></h2>
+    <p class="moment-sub">So close. One slip doesn’t define you — tomorrow you go again.</p>`;
+  stage.querySelector('.moment-title').after(gifFigure(FACEPALM_GIF));
+  document.body.classList.add('drained');
+  const shown = holdMoment(4500);
+  if (!reducedMotion()) {
+    fadeUp([...stage.querySelectorAll('.moment-kicker, .moment-title, .moment-sub')], 150);
+    stage.querySelector('.moment-gif')?.animate(
+      [{ opacity: 0, transform: 'translateY(30px) scale(0.9)' }, { opacity: 1, transform: 'none' }],
+      { duration: 700, delay: 350, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }
+    );
+  }
+  await shown;
+  document.body.classList.remove('drained');
 }
 
 // No: colour drains away and a sad little rain cloud drifts in
