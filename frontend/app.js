@@ -787,7 +787,7 @@ const giphy = (id, alt, ratio, width) => ({
   ratio,
   width
 });
-const SAD_GIF = giphy('78EYl1VZVA9KE', 'A sad, teary face', '289 / 283', 'min(230px, 58vw)');
+const SAD_GIF = giphy('78EYl1VZVA9KE', 'A sad, teary face', '289 / 283', 'min(320px, 76vw)');
 const CHEER_GIF = giphy('11sBLVxNs7v6WA', 'Minions cheering', '500 / 226');
 const FACEPALM_GIF = giphy('58FqDYgcQhrdSj5oUJ', 'A facepalm', '480 / 260');
 const THROW_GIF = giphy('FXGoDrsgrNLj2', 'Throwing a computer in frustration', '500 / 281');
