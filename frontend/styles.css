@@ -640,12 +640,6 @@ button.day.off, button.day.locked { cursor: not-allowed; }
 .moment.sad { background: rgba(8, 8, 11, 0.9); }
 body.drained main { filter: grayscale(1) brightness(0.7); transition: filter 0.8s ease; }
 main { transition: filter 0.8s ease; }
-.sad-cloud { width: 220px; height: 170px; overflow: visible; }
-.sad-cloud .cloud { fill: #2a2a33; stroke: #6b6878; stroke-width: 2.5; }
-.sad-cloud .face { stroke: #9a96a8; stroke-width: 3; fill: none; stroke-linecap: round; }
-.sad-cloud .tear { fill: #7fb6ff; }
-.sad-cloud .rain line { stroke: #7fb6ff; stroke-width: 2.5; stroke-linecap: round; animation: rain 0.9s linear infinite; }
-.sad-cloud .rain line:nth-child(2n) { animation-delay: -0.45s; }
 .moment.sad .moment-kicker { color: #9a96a8; }
 .moment.sad .moment-title em { background: none; color: #9a96a8; }
 

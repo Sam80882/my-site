@@ -780,12 +780,14 @@ function burstConfetti() {
 }
 
 // GIFs for the moments, served by Giphy (the video versions are far lighter than the .gif files)
-const giphy = (id, alt, ratio) => ({
+const giphy = (id, alt, ratio, width) => ({
   video: `https://media.giphy.com/media/${id}/giphy.mp4`,
   still: `https://media.giphy.com/media/${id}/giphy_s.gif`,
   alt,
-  ratio
+  ratio,
+  width
 });
+const SAD_GIF = giphy('78EYl1VZVA9KE', 'A sad, teary face', '289 / 283', 'min(230px, 58vw)');
 const CHEER_GIF = giphy('11sBLVxNs7v6WA', 'Minions cheering', '500 / 226');
 const FACEPALM_GIF = giphy('58FqDYgcQhrdSj5oUJ', 'A facepalm', '480 / 260');
 const THROW_GIF = giphy('FXGoDrsgrNLj2', 'Throwing a computer in frustration', '500 / 281');
@@ -806,6 +808,7 @@ function gifFigure(gif) {
     media.setAttribute('aria-label', gif.alt);
   }
   media.style.aspectRatio = gif.ratio;
+  if (gif.width) fig.style.width = gif.width;
   media.addEventListener('error', () => fig.remove()); // offline or blocked: just skip it
   const credit = document.createElement('figcaption');
   credit.textContent = 'via GIPHY';
@@ -885,27 +888,18 @@ async function momentNo() {
   const stage = $('#moment-stage');
   m.classList.add('sad');
   stage.innerHTML = `
-    <svg class="sad-cloud" viewBox="0 0 220 170" aria-hidden="true">
-      <path class="cloud" d="M52 112h118a32 32 0 0 0 0-64 46 46 0 0 0-88 6 28 28 0 0 0-30 58z"/>
-      <path class="face" d="M92 76v8M130 76v8M94 102q17-12 34 0"/>
-      <path class="tear" d="M90 90q-5 9 0 12q5-3 0-12z"/>
-      <g class="rain"><line x1="72" y1="126" x2="68" y2="140"/><line x1="96" y1="126" x2="92" y2="140"/><line x1="120" y1="126" x2="116" y2="140"/><line x1="144" y1="126" x2="140" y2="140"/></g>
-    </svg>
     <p class="moment-kicker">Streak interrupted</p>
     <h2 class="moment-title">Oh no… <em>that’s okay.</em></h2>
     <p class="moment-sub">A slip isn’t the end. Be honest about how many times, and tomorrow is a fresh page.</p>`;
+  stage.prepend(gifFigure(SAD_GIF));
   document.body.classList.add('drained');
-  const shown = holdMoment(3000);
+  const shown = holdMoment(4000);
   if (!reducedMotion()) {
-    stage.querySelector('.sad-cloud').animate(
-      [{ transform: 'translateX(-50vw) rotate(-8deg)', opacity: 0 }, { transform: 'none', opacity: 1 }],
-      { duration: 1100, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    stage.querySelector('.moment-gif')?.animate(
+      [{ transform: 'translateY(-40px) rotate(-4deg)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+      { duration: 900, easing: 'cubic-bezier(.2,.8,.2,1)' }
     );
-    stage.querySelector('.tear').animate(
-      [{ transform: 'translateY(0)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1, offset: 0.2 }, { transform: 'translateY(38px)', opacity: 0 }],
-      { duration: 1300, delay: 1000, iterations: 2 }
-    );
-    fadeUp([...stage.querySelectorAll('.moment-kicker, .moment-title, .moment-sub')], 600);
+    fadeUp([...stage.querySelectorAll('.moment-kicker, .moment-title, .moment-sub')], 500);
   }
   await shown;
   document.body.classList.remove('drained');
