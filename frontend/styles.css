@@ -665,3 +665,9 @@ main { transition: filter 0.8s ease; }
   .moment .medal { transform: scale(0.75); margin: -20px 0; }
 }
 .moment.sad .moment-gif { box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.7); }
+
+/* Applause GIF on the "Nicely done" screen */
+.done-art .moment-gif { margin: 0; box-shadow: 0 24px 60px -16px rgba(255, 194, 92, 0.45); }
+@media (max-width: 680px) {
+  .done-art:has(.moment-gif) { width: min(240px, 66vw); }
+}
