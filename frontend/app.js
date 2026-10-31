@@ -585,7 +585,7 @@ async function saveDay(body, btn) {
   try {
     entries[targetKey] = await api(`/api/entries/${targetKey}`, { method: 'PUT', body: JSON.stringify(body) });
     if (body.kept) await momentYes(streakAt(targetKey));
-    else if (body.count === 1) await momentOneSlip();
+    else await momentSlip(body.count);
     showDetail(true);
   } catch (err) {
     toast(err.message);
@@ -788,6 +788,7 @@ const giphy = (id, alt, ratio) => ({
 });
 const CHEER_GIF = giphy('11sBLVxNs7v6WA', 'Minions cheering', '500 / 226');
 const FACEPALM_GIF = giphy('58FqDYgcQhrdSj5oUJ', 'A facepalm', '480 / 260');
+const THROW_GIF = giphy('FXGoDrsgrNLj2', 'Throwing a computer in frustration', '500 / 281');
 
 function gifFigure(gif) {
   const fig = document.createElement('figure');
@@ -851,16 +852,20 @@ async function momentYes(n) {
   await shown;
 }
 
-// Saved as broken just once: a facepalm, then on to the result
-async function momentOneSlip() {
+// Saved as broken: a facepalm for one X, a thrown computer for two or more, then on to the result
+async function momentSlip(count) {
   const m = $('#moment');
   const stage = $('#moment-stage');
   m.classList.add('sad');
-  stage.innerHTML = `
+  const once = count === 1;
+  stage.innerHTML = once ? `
     <p class="moment-kicker">One X today</p>
     <h2 class="moment-title">Just <em>once.</em></h2>
-    <p class="moment-sub">So close. One slip doesn’t define you — tomorrow you go again.</p>`;
-  stage.querySelector('.moment-title').after(gifFigure(FACEPALM_GIF));
+    <p class="moment-sub">So close. One slip doesn’t define you — tomorrow you go again.</p>` : `
+    <p class="moment-kicker">${marksOf({ kept: false, count })} today</p>
+    <h2 class="moment-title">Rough <em>day.</em></h2>
+    <p class="moment-sub">${count} slips — frustrating, we know. Let it out, reset, and tomorrow is a clean page.</p>`;
+  stage.querySelector('.moment-title').after(gifFigure(once ? FACEPALM_GIF : THROW_GIF));
   document.body.classList.add('drained');
   const shown = holdMoment(4500);
   if (!reducedMotion()) {
